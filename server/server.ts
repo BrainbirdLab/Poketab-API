@@ -7,6 +7,7 @@ app.get('/', (_: Request, res: Response) => {
     res.send('Hello world!');
 });
 
+
 app.get('*', (_: Request, res: Response) => {
     res.status(404).send('Hmm.. I think you\'re lost.');
 });
