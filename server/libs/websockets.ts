@@ -1,6 +1,6 @@
 import http from 'node:http';
-import { Server, Socket } from 'socket.io';
-import { instrument } from '@socket.io/admin-ui';
+import { Server, Socket } from 'npm:socket.io';
+import { instrument } from 'npm:@socket.io/admin-ui';
 import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';

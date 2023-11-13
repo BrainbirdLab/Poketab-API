@@ -4,15 +4,6 @@
   "description": "Poketab Messenger Backend API",
   "main": "build/server/server.js",
   "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "deno run server/server.ts",
-    "build": "tsc",
-    "dev": "deno run --watch --allow-net --allow-read --allow-write server/server.ts"
-  },
-  "engines": {
-    "node": "20.x"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/itsfuad/Poketab-Backend.git"

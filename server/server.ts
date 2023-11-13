@@ -6,7 +6,7 @@ const port = 3000;
 
 //handle requests
 httpServer.on('request', (_, response) => {
-    console.log('Request Received');
+    //console.log('Request Received');
     
     response.write('Hello World');
     response.end();
