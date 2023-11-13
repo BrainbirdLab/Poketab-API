@@ -1,10 +1,10 @@
-import http from 'http';
+import http from 'node:http';
 import { Server, Socket } from 'socket.io';
 import { instrument } from '@socket.io/admin-ui';
-import { keyGenerator } from './keyGen.js';
-import { Key, User } from './schema.js';
-import { redis } from './database.js';
-import { validateAvatar, validateKey, validateUserName } from './utils.js';
+import { keyGenerator } from './keyGen.ts';
+import { Key, User } from './schema.ts';
+import { redis } from './database.ts';
+import { validateAvatar, validateKey, validateUserName } from './utils.ts';
 
 export const httpServer = http.createServer();
 
@@ -12,7 +12,7 @@ export const httpServer = http.createServer();
 
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:5174', 'https://admin.socket.io'],
+    origin: ['http://localhost:5173', 'https://admin.socket.io'],
     credentials: true
   }
 });
@@ -26,6 +26,12 @@ io.on('connection', (socket) => {
   console.log('Socket Connected');
 
   socket.on('fetchKeyData', async (key: string, callback) => {
+    console.log(redis.isReady);
+    if (!redis.isReady){
+      console.log('Redis not connected');
+      callback({success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null})
+      return;
+    }
 
     console.log('fetchKeyData for key: ', key);
 
@@ -36,6 +42,7 @@ io.on('connection', (socket) => {
 
     console.log('Searching database...');
 
+
     try {
       const exists = await redis.exists(`chat:${key}`);
 
@@ -45,7 +52,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const {activeUsers, maxUsers, users}: Key = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Object as Key;
+      const {activeUsers, maxUsers, users}: Key = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Key;
 
       console.log('maxUsers: ', maxUsers);
       console.log('activeUsers: ', activeUsers);
@@ -67,6 +74,11 @@ io.on('connection', (socket) => {
   socket.on('createChat', async (name: string, avatar: string, maxUsers: number, callback) => {
 
     console.log('createChat', name, avatar, maxUsers);
+
+    if (!redis.isReady){
+      callback({success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null})
+      return;
+    }
 
     if (!validateUserName(name)) {
       callback({ success: false, message: 'Invalid name', icon: 'fa-solid fa-triangle-exclamation' });
@@ -149,6 +161,11 @@ io.on('connection', (socket) => {
   socket.on('joinChat', async (key: string, name: string, avatar: string, callback) => {
     console.log('joinChat', key, name, avatar);
 
+    if (!redis.isReady){
+      callback({success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null})
+      return;
+    }
+
     if (!validateKey(key)) {
       callback({ success: false, message: 'Invalid Key', icon: 'fa-solid fa-triangle-exclamation' });
       return;
@@ -169,7 +186,7 @@ io.on('connection', (socket) => {
       if (await redis.exists(`chat:${key}`)) {
 
         //retrive .activeUsers, .maxUsers, and .users from redis in one call
-        const redisData = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Object as Key;
+        const redisData = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Key;
         console.log('redisData: ', redisData);
         if (redisData) {
           const { activeUsers, maxUsers, users } = redisData as Key;
@@ -260,7 +277,7 @@ async function exitSocket(socket: Socket, key: string){
       return;
     }
     //get uid from redis
-    const {name, uid} = await redis.json.get(`socket:${socket.id}`) as Object as {key: string, name: string, uid: string};
+    const {name, uid} = await redis.json.get(`socket:${socket.id}`) as {key: string, name: string, uid: string};
     
     //remove user from redis
     await Promise.all([
@@ -272,7 +289,7 @@ async function exitSocket(socket: Socket, key: string){
   
     console.log(`User ${name} left ${key}`);
   
-    const {activeUsers, maxUsers} = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers"]}) as Object as Key;
+    const {activeUsers, maxUsers} = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers"]}) as Key;
   
     if (activeUsers == null || maxUsers == null) {
       console.log('Invalid key');
@@ -285,7 +302,7 @@ async function exitSocket(socket: Socket, key: string){
       console.log('Key deleted');
     } else {
       //get users from redis
-      const users = await redis.json.get(`chat:${key}`, {path: ["users"]}) as Object as {[key: string]: User};
+      const users = await redis.json.get(`chat:${key}`, {path: ["users"]}) as {[key: string]: User};
 
       io.to(`chat:${key}`).emit('updateUserList', users);
       console.log(`sent update user list to ${key}. users count: ${activeUsers}`);

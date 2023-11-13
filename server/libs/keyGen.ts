@@ -1,4 +1,4 @@
-import { redis } from "./database.js";
+import { redis } from "./database.ts";
 
 export async function keyGenerator() {
     const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

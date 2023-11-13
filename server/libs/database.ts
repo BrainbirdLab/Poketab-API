@@ -2,9 +2,12 @@ import { createClient } from 'redis';
 //use dotenv to get environment variables
 
 import dotenv from 'dotenv';
+
 dotenv.config();
 
-const { host, password, port } = process.env;
+const host = Deno.env.get('host');
+const port = Deno.env.get('port');
+const password = Deno.env.get('password');
 
 export const redis = createClient({
     password: password,
@@ -14,14 +17,14 @@ export const redis = createClient({
     }
 });
 
-redis.connect();
-
-//clear redis
-redis.flushAll();
 
 try{
+    redis.connect();
 
-    redis.on('connect', async () => {
+    //clear redis
+    redis.flushAll();
+
+    redis.on('connect', () => {
         console.log('Redis Connected');
     });
     
