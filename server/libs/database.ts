@@ -1,4 +1,4 @@
-import { createClient } from 'redis';
+import { createClient } from 'npm:redis';
 
 const host = Deno.env.get('host');
 const port = Deno.env.get('port');
