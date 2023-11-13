@@ -9,10 +9,13 @@ const port = 3000;
 httpServer.on('request', (req, response) => {
     if (req.url === '/') {
         response.writeHead(200, {'Content-Type': 'text/html'});
-        response.end(`<h1>Server Running</h1>`);
+        response.end('Server Running');
     } else if (req.url === '/ping'){
         response.writeHead(200, {'Content-Type': 'text/html'});
         response.end('pong');
+    } else {
+        response.writeHead(404, {'Content-Type': 'text/html'});
+        response.end('404 Not Found');
     }
 });
 
