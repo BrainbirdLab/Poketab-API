@@ -12,6 +12,8 @@ export const httpServer = http.createServer();
 
 const clientURL = Deno.env.get('clientURL') as string;
 
+console.log('clientURL: ', clientURL);
+
 const io = new Server(httpServer, {
   cors: {
     origin: [clientURL, 'https://admin.socket.io'],
