@@ -1,24 +1,12 @@
 console.log('Server Initiated');
+// @deno-types="npm:@types/express@4"
+import {Request, Response} from 'npm:express';
+import {app} from './libs/websockets.ts';
 
-import { httpServer } from './libs/websockets.ts';
-
-const port = 3000;
-
-
-//handle requests
-httpServer.on('request', (req, response) => {
-    if (req.url === '/') {
-        response.writeHead(200, {'Content-Type': 'text/html'});
-        response.end('Server Running');
-    } else if (req.url === '/ping'){
-        response.writeHead(200, {'Content-Type': 'text/html'});
-        response.end('pong');
-    } else {
-        response.writeHead(404, {'Content-Type': 'text/html'});
-        response.end('404 Not Found');
-    }
+app.get('/', (_: Request, res: Response) => {
+    res.send('Hello world!');
 });
 
-httpServer.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+app.get('*', (_: Request, res: Response) => {
+    res.status(404).send('Hmm.. I think you\'re lost.');
 });

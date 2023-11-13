@@ -1,27 +1,28 @@
 import http from 'node:http';
-import { Server, Socket } from 'npm:socket.io';
-import { instrument } from 'npm:@socket.io/admin-ui';
+// @deno-types="npm:@types/express@4"
+import express, { Request, Response } from "npm:express@4.18.2";
+import { Server, type Socket } from "npm:socket.io";
 import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
 import { validateAvatar, validateKey, validateUserName } from './utils.ts';
-import "https://deno.land/x/dotenv/load.ts";
-
-export const httpServer = http.createServer();
+import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //this will only serve websocket connections and not http requests
 
 const {clienturl} = Deno.env.toObject();
 
+export const app = express();
+
+const httpServer = http.createServer(app);
+
+
 const io = new Server(httpServer, {
   cors: {
-    origin: [clienturl, 'https://admin.socket.io'],
+    origin: clienturl,
+    methods: ["GET", "POST"],
     credentials: true
   }
-});
-
-instrument(io, {
-  auth: false,
 });
 
 io.on('connection', (socket) => {
@@ -315,3 +316,9 @@ async function exitSocket(socket: Socket, key: string){
     console.error(error);
   }
 }
+
+const port = 3000;
+
+httpServer.listen(port, () => {
+  console.log(`Listening on port ${port}`);
+});
