@@ -2,6 +2,7 @@ import http from 'node:http';
 // @deno-types="npm:@types/express@4"
 import express, { Request, Response } from "npm:express@4.18.2";
 import { Server, type Socket } from "npm:socket.io";
+import {instrument} from "npm:@socket.io/admin-ui";
 import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
@@ -19,10 +20,14 @@ const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: clienturl,
+    origin: [clienturl, 'https://admin.socket.io'],
     methods: ["GET", "POST"],
     credentials: true
   }
+});
+
+instrument(io, {
+  auth: false
 });
 
 io.on('connection', (socket) => {
@@ -58,15 +63,13 @@ io.on('connection', (socket) => {
 
       const {activeUsers, maxUsers, users}: Key = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Key;
 
-      console.log('maxUsers: ', maxUsers);
-      console.log('activeUsers: ', activeUsers);
-
       if (activeUsers >= maxUsers) {
         callback({ success: false, message: 'Key Full', statusCode: 401, icon: 'fa-solid fa-door-closed', users: {}, maxUsers: null });
         return;
       }
 
       socket.join(`waitingRoom:${key}`);
+      console.log(socket.id, 'joined waiting room for key: ', key);
 
       callback({ success: true, message: 'Key Data Found', statusCode: 200, icon: '', users: {...users}, maxUsers: maxUsers });
     } catch (error) {
@@ -123,6 +126,7 @@ io.on('connection', (socket) => {
 
       socket.join(`chat:${key}`);
       socket.leave(`waitingRoom:${key}`);
+      console.log(socket.id, 'left waiting room for key: ', key);
 
       await Promise.all([
         redis.json.set(`chat:${key}`, '.', chatKey),
@@ -141,7 +145,7 @@ io.on('connection', (socket) => {
       console.log('Chat Created');
       io.to(`chat:${key}`).emit('updateUserList', {[uid]: me});
       console.log(`sent update user list to ${key}. users count: 1`);
-      io.to(`waitingRoom:${key}`).emit('updateUserList', {uid: me});
+      io.to(`waitingRoom:${key}`).emit('updateUserListWR', {uid: me});
 
       
       socket.on('disconnect', async () => {
@@ -191,7 +195,6 @@ io.on('connection', (socket) => {
 
         //retrive .activeUsers, .maxUsers, and .users from redis in one call
         const redisData = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers", "users"]}) as Key;
-        console.log('redisData: ', redisData);
         if (redisData) {
           const { activeUsers, maxUsers, users } = redisData as Key;
 
@@ -210,7 +213,8 @@ io.on('connection', (socket) => {
           };
   
           socket.join(`chat:${key}`);
-          socket.leave(`waitingRoom-${key}`);
+          socket.leave(`waitingRoom:${key}`);
+          console.log(socket.id, 'left waiting room for key: ', key);
   
           await Promise.all([
             redis.json.set(`chat:${key}`, `.users.${uid}`, me),
@@ -227,7 +231,7 @@ io.on('connection', (socket) => {
           //log the connected users on that room
           io.to(`chat:${key}`).emit('updateUserList', {...users, [uid]: me});
           console.log(`sent update user list to ${key}. users count: ${activeUsers + 1}`);
-          io.to(`waitingRoom-${key}`).emit('updateUserList', {...users, [uid]: me});
+          io.to(`waitingRoom:${key}`).emit('updateUserListWR', {...users, [uid]: me});
         
         
           socket.on('disconnect', async () => {
@@ -272,7 +276,7 @@ async function exitSocket(socket: Socket, key: string){
   
   try{
     
-    socket.leave(`waitingRoom-${key}`);
+    socket.leave(`waitingRoom:${key}`);
     socket.leave(`chat:${key}`);
 
     //if socket not exists in redis, return
@@ -310,7 +314,7 @@ async function exitSocket(socket: Socket, key: string){
 
       io.to(`chat:${key}`).emit('updateUserList', users);
       console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
-      io.to(`waitingRoom-${key}`).emit('updateUserList', users);
+      io.to(`waitingRoom:${key}`).emit('updateUserListWR', users);
     }
   } catch (error) {
     console.error(error);
