@@ -10,9 +10,11 @@ export const httpServer = http.createServer();
 
 //this will only serve websocket connections and not http requests
 
+const clientURL = Deno.env.get('clientURL') as string;
+
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'https://admin.socket.io'],
+    origin: [clientURL, 'https://admin.socket.io'],
     credentials: true
   }
 });
