@@ -5,18 +5,17 @@ import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
 import { validateAvatar, validateKey, validateUserName } from './utils.ts';
+import { env } from "./config.ts";
 
 export const httpServer = http.createServer();
 
 //this will only serve websocket connections and not http requests
 
-const clientURL = Deno.env.get('clientURL') as string;
-
-console.log('clientURL: ', clientURL);
+const {clienturl} = env;
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [clientURL, 'https://admin.socket.io'],
+    origin: [clienturl, 'https://admin.socket.io'],
     credentials: true
   }
 });

@@ -1,8 +1,7 @@
 import { createClient } from 'npm:redis';
+import { env } from "./config.ts";
 
-const host = Deno.env.get('host');
-const port = Deno.env.get('port');
-const password = Deno.env.get('password');
+const {password, host, port} = env;
 
 export const redis = createClient({
     password: password,
