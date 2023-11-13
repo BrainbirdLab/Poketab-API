@@ -6,6 +6,7 @@
       "npm:@socket.io/admin-ui@^0.5.1": "npm:@socket.io/admin-ui@0.5.1_socket.io@4.7.2",
       "npm:dotenv@^16.3.1": "npm:dotenv@16.3.1",
       "npm:redis@^4.6.10": "npm:redis@4.6.10_@redis+client@1.5.11",
+      "npm:socket.io": "npm:socket.io@4.7.2",
       "npm:socket.io@^4.7.2": "npm:socket.io@4.7.2"
     },
     "npm": {

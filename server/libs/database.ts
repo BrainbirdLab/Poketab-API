@@ -1,9 +1,4 @@
 import { createClient } from 'redis';
-//use dotenv to get environment variables
-
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const host = Deno.env.get('host');
 const port = Deno.env.get('port');
