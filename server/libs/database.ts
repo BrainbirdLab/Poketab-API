@@ -3,8 +3,6 @@ import 'https://deno.land/x/dotenv/load.ts';
 
 const {password, host, port} = Deno.env.toObject();
 
-console.log('Cred: ', password, host, port);
-
 export const redis = createClient({
     password: password,
     socket: {

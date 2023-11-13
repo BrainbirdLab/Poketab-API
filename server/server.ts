@@ -4,11 +4,15 @@ import { httpServer } from './libs/websockets.ts';
 
 const port = 3000;
 
+
 //handle requests
 httpServer.on('request', (_, response) => {
     //console.log('Request Received');
     
-    response.write('Hello World');
+    const {password, host, port} = Deno.env.toObject();
+    
+    console.log('Cred: ', password, host, port);
+    response.write(`Cred: ${password}, ${host}, ${port}`);
     response.end();
 });
 
