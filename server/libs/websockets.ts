@@ -5,13 +5,13 @@ import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
 import { validateAvatar, validateKey, validateUserName } from './utils.ts';
-import { env } from "./config.ts";
+import "https://deno.land/x/dotenv/load.ts";
 
 export const httpServer = http.createServer();
 
 //this will only serve websocket connections and not http requests
 
-const {clienturl} = env;
+const {clienturl} = Deno.env.toObject();
 
 const io = new Server(httpServer, {
   cors: {
