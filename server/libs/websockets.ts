@@ -1,12 +1,12 @@
 import http from 'node:http';
 // @deno-types="npm:@types/express@4"
-import express, { Request, Response } from "npm:express@4.18.2";
+import express from "npm:express@4.18.2";
 import { Server, type Socket } from "npm:socket.io";
 import {instrument} from "npm:@socket.io/admin-ui";
 import { keyGenerator } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
-import { validateAvatar, validateKey, validateUserName } from './utils.ts';
+import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //this will only serve websocket connections and not http requests
@@ -130,7 +130,7 @@ io.on('connection', (socket) => {
 
       await Promise.all([
         redis.json.set(`chat:${key}`, '.', chatKey),
-        redis.json.set(`socket:${socket.id}`, '.', {name, uid}),
+        redis.json.set(`socket:${socket.id}`, '.', {name, uid, key}),
       ]);
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
@@ -146,6 +146,7 @@ io.on('connection', (socket) => {
       io.to(`chat:${key}`).emit('updateUserList', {[uid]: me});
       console.log(`sent update user list to ${key}. users count: 1`);
       io.to(`waitingRoom:${key}`).emit('updateUserListWR', {uid: me});
+      socket.emit('server_message', {text: 'You joined the that🔥', id: crypto.randomUUID()}, 'join');
 
       
       socket.on('disconnect', async () => {
@@ -218,7 +219,7 @@ io.on('connection', (socket) => {
   
           await Promise.all([
             redis.json.set(`chat:${key}`, `.users.${uid}`, me),
-            redis.json.set(`socket:${socket.id}`, '.', {name, uid}),
+            redis.json.set(`socket:${socket.id}`, '.', {name, uid, key}),
             //redis.json.set(key, '.activeUsers', activeUsers + 1),
             redis.json.numIncrBy(`chat:${key}`, '.activeUsers', 1),
           ]);
@@ -232,7 +233,8 @@ io.on('connection', (socket) => {
           io.to(`chat:${key}`).emit('updateUserList', {...users, [uid]: me});
           console.log(`sent update user list to ${key}. users count: ${activeUsers + 1}`);
           io.to(`waitingRoom:${key}`).emit('updateUserListWR', {...users, [uid]: me});
-        
+
+          socket.emit('server_message', {text: 'You joined the that🔥', id: crypto.randomUUID()}, 'join');
         
           socket.on('disconnect', async () => {
             console.log(`Chat Socket ${socket.id} Disconnected`);
@@ -268,7 +270,29 @@ io.on('connection', (socket) => {
     //broadcast the message
     socket.broadcast.emit('newMessage', message, messageId);
     callback(messageId);
+
+    getLinkMetadata(message.message).then((data) => {
+      if (data.success) {
+        redis.json.get(`socket:${socket.id}`, {path: ["key"]}).then((key) => {
+          io.to(`chat:${key}`).emit('linkMetadata', messageId, data.data);
+        });
+      }
+    });
   });
+
+
+  socket.on('react', (messageId: string, userId: string, react: string) => {
+    //broadcast to all
+    socket.broadcast.emit('react', messageId, userId, react);
+  });
+
+
+  socket.on('seen', (uid: string, msgId: string) => {
+    socket.broadcast.emit('seen', uid, msgId);
+  });
+
+
+
 });
 
 
@@ -285,7 +309,7 @@ async function exitSocket(socket: Socket, key: string){
       return;
     }
     //get uid from redis
-    const {name, uid} = await redis.json.get(`socket:${socket.id}`) as {key: string, name: string, uid: string};
+    const {name, uid} = await redis.json.get(`socket:${socket.id}`) as {name: string, uid: string, key: string};
     
     //remove user from redis
     await Promise.all([
@@ -296,6 +320,7 @@ async function exitSocket(socket: Socket, key: string){
     ]);
   
     console.log(`User ${name} left ${key}`);
+    socket.emit('server_message', {text: `${name} left the chat😭`, id: crypto.randomUUID()}, 'leave');
   
     const {activeUsers, maxUsers} = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers"]}) as Key;
   
@@ -322,6 +347,13 @@ async function exitSocket(socket: Socket, key: string){
 }
 
 const port = 3000;
+
+
+app.get('/', (req, res) => {
+
+  //check system status. If redis ready
+  res.send(redis.isReady);
+});
 
 httpServer.listen(port, () => {
   console.log(`Listening on port ${port}`);
