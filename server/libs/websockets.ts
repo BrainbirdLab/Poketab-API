@@ -27,7 +27,11 @@ const io = new Server(httpServer, {
 });
 
 instrument(io, {
-  auth: false
+  auth: {
+    type: 'basic',
+    username: 'admin',
+    password: 'admin'
+  }
 });
 
 io.on('connection', (socket) => {
@@ -322,10 +326,10 @@ async function exitSocket(socket: Socket, key: string){
     console.log(`User ${name} left ${key}`);
     socket.emit('server_message', {text: `${name} left the chat😭`, id: crypto.randomUUID()}, 'leave');
   
-    const {activeUsers, maxUsers} = await redis.json.get(`chat:${key}`, {path: ["activeUsers", "maxUsers"]}) as Key;
+    const activeUsers = await redis.json.get(`chat:${key}`, {path: ["activeUsers"]}) as number;
   
-    if (activeUsers == null || maxUsers == null) {
-      console.log('Invalid key');
+    if (!activeUsers) {
+      console.log('Empty key');
       return;
     }
   
@@ -349,7 +353,7 @@ async function exitSocket(socket: Socket, key: string){
 const port = 3000;
 
 
-app.get('/', (req, res) => {
+app.get('/', (_, res) => {
 
   //check system status. If redis ready
   res.send(redis.isReady);
