@@ -295,8 +295,9 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('seen', uid, msgId);
   });
 
-
-
+  socket.on('typing', (uid: string, event: string) => {
+    socket.broadcast.emit('typing', uid, event);
+  });
 });
 
 
