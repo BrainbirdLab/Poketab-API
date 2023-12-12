@@ -54,36 +54,12 @@ export function validateAll(name: string, key: string, avatar: string) {
 	return (validateUserName(name) && validateKey(key) && validateAvatar(avatar));
 }
 
-const badWords: Record<string, boolean> = {
-	'fuck': true,
-	'sex': true,
-	'dick': true,
-	'vagina': true,
-	'cum': true,
-	'boob': true,
-	'anal': true,
-	'horny': true,
-	'gangbang': true,
-	'baal': true,
-	'abal': true,
-	'bhodai': true,
-	'vodai': true,
-	'khanki': true,
-	'magi': true,
-	'kutta': true,
-	'hoga': true,
-	'rape': true,
-	'porn': true,
-	'dildo': true,
-	'vibrator': true,
-};
 
 export async function getLinkMetadata(message: string) {
 	const regex = /https?:\/\/[^\s]+/g;
 	const link = message.match(regex);
 
 	if (link) {
-		console.log(`Link: ${link[0]}`);
 		const url = link[0];
 		const html = await fetch(url).then((res) => res.text());
 		const titleRegex = /<title[^>]*>([^<]+)<\/title>/g;
@@ -99,12 +75,6 @@ export async function getLinkMetadata(message: string) {
 			const urlObject = new URL(url);
 			image = `${urlObject.protocol}//${urlObject.host}${image}`;
 		}
-
-
-		console.log(`Title: ${title}`);
-		console.log(`Description: ${description}`);
-		console.log(`Image: ${image}`);
-		console.log(`Url ${url}`);
 
 		return {
 			success: true,

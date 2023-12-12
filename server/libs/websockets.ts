@@ -284,12 +284,16 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('deleteMessage', (messageId: string, userId: string) => {
+    //send back to all users in the room including the sender
+    socket.emit('deleteMessage', messageId, userId);
+  });
+
 
   socket.on('react', (messageId: string, userId: string, react: string) => {
     //broadcast to all
     socket.broadcast.emit('react', messageId, userId, react);
   });
-
 
   socket.on('seen', (uid: string, msgId: string) => {
     socket.broadcast.emit('seen', uid, msgId);
@@ -297,6 +301,11 @@ io.on('connection', (socket) => {
 
   socket.on('typing', (uid: string, event: string) => {
     socket.broadcast.emit('typing', uid, event);
+  });
+
+  socket.on('location', (position, uid) => {
+    const messageId = crypto.randomUUID();
+    socket.emit('location', position, messageId, uid);
   });
 });
 
