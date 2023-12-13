@@ -239,6 +239,7 @@ io.on('connection', (socket) => {
           io.to(`waitingRoom:${key}`).emit('updateUserListWR', {...users, [uid]: me});
 
           socket.emit('server_message', {text: 'You joined the that🔥', id: crypto.randomUUID()}, 'join');
+          socket.broadcast.emit('server_message', {text: `${name} joined the that🔥`, id: crypto.randomUUID()}, 'join');
         
           socket.on('disconnect', async () => {
             console.log(`Chat Socket ${socket.id} Disconnected`);
@@ -275,18 +276,18 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('newMessage', message, messageId);
     callback(messageId);
 
-    getLinkMetadata(message.message).then((data) => {
-      if (data.success) {
-        redis.json.get(`socket:${socket.id}`, {path: ["key"]}).then((key) => {
-          io.to(`chat:${key}`).emit('linkMetadata', messageId, data.data);
-        });
-      }
-    });
+    if (message.kind == 'text'){
+      getLinkMetadata(message.message).then((data) => {
+        if (data.success) {
+          io.emit('linkPreviewData', messageId, data.data);
+        }
+      });
+    }
   });
 
   socket.on('deleteMessage', (messageId: string, userId: string) => {
     //send back to all users in the room including the sender
-    socket.emit('deleteMessage', messageId, userId);
+    io.emit('deleteMessage', messageId, userId);
   });
 
 

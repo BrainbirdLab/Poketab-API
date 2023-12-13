@@ -76,13 +76,17 @@ export async function getLinkMetadata(message: string) {
 			image = `${urlObject.protocol}//${urlObject.host}${image}`;
 		}
 
+		//the url can be https://www.youtube.com/watch?v=12345678901. We need to convert it to https://www.youtube.com
+		const urlObject = new URL(url);
+		const urlWithoutPath = `${urlObject.protocol}//${urlObject.host}`;
+
 		return {
 			success: true,
 			data: {
 				title,
 				description,
 				image,
-				url,
+				url: urlWithoutPath,
 			},
 		};
 
