@@ -1,6 +1,17 @@
 import { redis } from "./database.ts";
 
-export async function keyGenerator() {
+export async function getRandomKey() {
+
+    const key = makeKey();
+    //check if key exists
+    const keyExists = await redis.exists(key);
+    if (keyExists) {
+        return getRandomKey();
+    }
+    return key;
+}
+
+export function makeKey() {
     const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let key = '';
 
@@ -14,12 +25,6 @@ export async function keyGenerator() {
     key += '-';
     for (let i = 0; i < 2; i++) {
         key += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    
-    //check if key exists
-    const keyExists = await redis.exists(key);
-    if (keyExists) {
-        return keyGenerator();
     }
     return key;
 }

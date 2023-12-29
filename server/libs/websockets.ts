@@ -1,22 +1,16 @@
-import http from 'node:http';
-// @deno-types="npm:@types/express@4"
-import express from "npm:express@4.18.2";
+
 import { Server, type Socket } from "npm:socket.io";
 import {instrument} from "npm:@socket.io/admin-ui";
-import { keyGenerator } from './keyGen.ts';
+import { getRandomKey } from './keyGen.ts';
 import { Key, User } from './schema.ts';
 import { redis } from './database.ts';
+import { httpServer } from './apiServer.ts';
 import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //this will only serve websocket connections and not http requests
 
 const {clienturl} = Deno.env.toObject();
-
-export const app = express();
-
-const httpServer = http.createServer(app);
-
 
 const io = new Server(httpServer, {
   cors: {
@@ -108,7 +102,7 @@ io.on('connection', (socket) => {
 
     try {
       const uid = crypto.randomUUID();
-      const key = await keyGenerator();
+      const key = await getRandomKey();
 
       const user: User = {
         name: name,
@@ -360,16 +354,3 @@ async function exitSocket(socket: Socket, key: string){
     console.error(error);
   }
 }
-
-const port = 3000;
-
-
-app.get('/', (_, res) => {
-
-  //check system status. If redis ready
-  res.send(redis.isReady);
-});
-
-httpServer.listen(port, () => {
-  console.log(`Listening on port ${port}`);
-});
