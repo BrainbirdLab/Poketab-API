@@ -14,7 +14,7 @@ const port = 3000;
 
 app.get('/', (_, res) => {
   //check system status. If redis ready
-    res.send({redis: redis.isReady});
+    res.send({redis: redis.isReady ? "online" : "offline", system: 'online'});
 });
 
 httpServer.listen(port, () => {
