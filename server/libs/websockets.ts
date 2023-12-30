@@ -69,7 +69,7 @@ io.on('connection', (socket) => {
       socket.join(`waitingRoom:${key}`);
       console.log(socket.id, 'joined waiting room for key: ', key);
 
-      callback({ success: true, message: 'Key Data Found', statusCode: 200, icon: '', users: {...users}, maxUsers: maxUsers });
+      callback({ success: true, message: 'Available', statusCode: 200, icon: '', users: {...users}, maxUsers: maxUsers });
     } catch (error) {
       console.error(error);
       callback({ success: false, message: 'Server Error', statusCode: 500, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null });
