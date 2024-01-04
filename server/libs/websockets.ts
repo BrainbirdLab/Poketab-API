@@ -78,10 +78,12 @@ io.on('connection', (socket) => {
 
   socket.on('createChat', async (name: string, avatar: string, maxUsers: number, callback) => {
 
-    console.log('createChat', name, avatar, maxUsers);
+    console.log('createChat requested');
 
     if (!redis.isReady){
       callback({success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null})
+      //try to reconnect
+      redis.connect();
       return;
     }
 
@@ -166,10 +168,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinChat', async (key: string, name: string, avatar: string, callback) => {
-    console.log('joinChat', key, name, avatar);
+    console.log('joinChat requested');
 
     if (!redis.isReady){
       callback({success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null})
+      //try to reconnect
+      redis.connect();
       return;
     }
 
