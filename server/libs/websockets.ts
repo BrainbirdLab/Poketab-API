@@ -1,4 +1,3 @@
-
 import { Server, type Socket } from "npm:socket.io";
 import {instrument} from "npm:@socket.io/admin-ui";
 import { getRandomKey } from './keyGen.ts';
@@ -290,8 +289,7 @@ io.on('connection', (socket) => {
 
 
   socket.on('react', (messageId: string, userId: string, react: string) => {
-    //broadcast to all
-    socket.broadcast.emit('react', messageId, userId, react);
+    io.emit('react', messageId, userId, react);
   });
 
   socket.on('seen', (uid: string, msgId: string) => {
@@ -304,7 +302,7 @@ io.on('connection', (socket) => {
 
   socket.on('location', (position, uid) => {
     const messageId = crypto.randomUUID();
-    socket.emit('location', position, messageId, uid);
+    io.emit('location', position, messageId, uid);
   });
 });
 
