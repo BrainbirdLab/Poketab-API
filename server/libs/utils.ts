@@ -56,45 +56,55 @@ export function validateAll(name: string, key: string, avatar: string) {
 
 
 export async function getLinkMetadata(message: string) {
-	const regex = /https?:\/\/[^\s]+/g;
-	const link = message.match(regex);
 
-	if (link) {
-		const url = link[0];
-		const html = await fetch(url).then((res) => res.text());
-		const titleRegex = /<title[^>]*>([^<]+)<\/title>/g;
-		const descriptionRegex = /<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/g;
-		const imageRegex = /<meta[^>]*property="og:image"[^>]*content="([^"]*)"[^>]*>/g;
+	try{
 
-		const title = titleRegex.exec(html)?.[1] || '';
-		const description = descriptionRegex.exec(html)?.[1] || '';
-		let image = imageRegex.exec(html)?.[1] || '';
-
-		//if image path is relative, convert it to absolute
-		if (image && image.startsWith('/')) {
+		const regex = /https?:\/\/[^\s]+/g;
+		const link = message.match(regex);
+	
+		if (link) {
+			const url = link[0];
+			const html = await fetch(url).then((res) => res.text());
+			const titleRegex = /<title[^>]*>([^<]+)<\/title>/g;
+			const descriptionRegex = /<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/g;
+			const imageRegex = /<meta[^>]*property="og:image"[^>]*content="([^"]*)"[^>]*>/g;
+	
+			const title = titleRegex.exec(html)?.[1] || '';
+			const description = descriptionRegex.exec(html)?.[1] || '';
+			let image = imageRegex.exec(html)?.[1] || '';
+	
+			//if image path is relative, convert it to absolute
+			if (image && image.startsWith('/')) {
+				const urlObject = new URL(url);
+				image = `${urlObject.protocol}//${urlObject.host}${image}`;
+			}
+	
+			//the url can be https://www.youtube.com/watch?v=12345678901. We need to convert it to https://www.youtube.com
 			const urlObject = new URL(url);
-			image = `${urlObject.protocol}//${urlObject.host}${image}`;
+			const urlWithoutPath = `${urlObject.protocol}//${urlObject.host}`;
+	
+			return {
+				success: true,
+				data: {
+					title,
+					description,
+					image,
+					url: urlWithoutPath,
+				},
+			};
+	
+		} else {
+			//console.error('No valid links found in the message.');
+			return {
+				success: false,
+				error: 'No valid links found in the message',
+			};
 		}
-
-		//the url can be https://www.youtube.com/watch?v=12345678901. We need to convert it to https://www.youtube.com
-		const urlObject = new URL(url);
-		const urlWithoutPath = `${urlObject.protocol}//${urlObject.host}`;
-
-		return {
-			success: true,
-			data: {
-				title,
-				description,
-				image,
-				url: urlWithoutPath,
-			},
-		};
-
-	} else {
-		//console.error('No valid links found in the message.');
+	} catch (e) {
+		//console.error(e);
 		return {
 			success: false,
-			error: 'No valid links found in the message',
+			error: 'Error fetching link metadata',
 		};
 	}
 }
