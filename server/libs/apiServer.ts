@@ -1,22 +1,37 @@
-import http from 'node:http';
-// @deno-types="npm:@types/express@4"
-import express from "npm:express@4.18.2";
-import { redis } from "./database.ts";
-
-export const app = express();
-
-export const httpServer = http.createServer(app);
-
-
+import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
+// @deno-types="npm:hono"
+import { Hono } from "https://deno.land/x/hono@v3.12.3/mod.ts"
+import { io } from "./websockets.ts";
 
 const port = 3000;
 
+const app = new Hono();
 
-app.get('/', (_, res) => {
-  //check system status. If redis ready
-    res.send({redis: redis.isReady ? "online" : "offline", system: 'online'});
+//set custom headers for all responses
+app.use("*", async (ctx, next) => {
+  const start = Date.now();
+  ctx.header('X-Server', 'Deno');
+  ctx.header('X-Powered-By', 'Hono');
+  ctx.header('Access-Control-Allow-Origin', 'http://127.0.0.1:5678');
+  ctx.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  await next();
+  const ms = Date.now() - start;
+  ctx.header('X-Response-Time', `${ms}ms`);
 });
 
-httpServer.listen(port, () => {
-    console.log(`Listening on port ${port}`);
+app.options('*', (ctx) => {
+  ctx.status(200);
+  return ctx.text('OK');
 });
+
+app.get('/', (ctx) => {
+  return ctx.text('Hello world');
+});
+
+
+const handler = io.handler(async (req) => {
+  //upgrade to websocket
+  return await app.fetch(req) || new Response(null, { status: 404 });
+});
+
+await serve(handler, { port: +port });

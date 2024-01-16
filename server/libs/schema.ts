@@ -11,5 +11,4 @@ export type Key = {
 	maxUsers: number;
 	admin: string | null;
 	created: number;
-	keyName: string;
 }
