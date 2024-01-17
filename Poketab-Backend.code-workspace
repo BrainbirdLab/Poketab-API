@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"deepscan.enable": true,
+		"deno.enable": true
+	}
+}
