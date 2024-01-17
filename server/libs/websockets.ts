@@ -160,9 +160,9 @@ io.on('connection', (socket) => {
       };
 
       console.log('Chat Created');
-      io.in(`chat:${key}`).emit('updateUserList', { uid: me });
+      io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
       console.log(`sent update user list to ${key}. users count: 1`);
-      io.in(`waitingRoom:${key}`).emit('updateUserListWR', { uid: me });
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', { [uid]: me });
       //only sender
       socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
 
