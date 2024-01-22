@@ -1,4 +1,4 @@
-import { redis } from "./websockets.ts";
+import { redis } from "./database.ts";
 
 export async function getRandomKey() {
 

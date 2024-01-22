@@ -1,27 +1,12 @@
 
 import { getRandomKey } from './keyGen.ts';
-import { Key, User } from './schema.ts';
+import { Key, User } from './database.ts';
 import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
-import { connect } from "https://deno.land/x/redis/mod.ts";
 import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
+import { redis } from "./database.ts";
 
-//this will only serve websocket connections and not http requests
-
-const { clienturl, host, password, port } = Deno.env.toObject();
-
-export const redis = await connect({
-  hostname: host,
-  port: +port,
-  password: password,
-  maxRetryCount: 5,
-});
-
-//delete all keys
-await redis.sendCommand('FLUSHALL');
-
-console.log('Redis connected');
-
+const { clienturl } = Deno.env.toObject();
 
 export const io = new Server({
   cors: {
@@ -302,8 +287,10 @@ io.on('connection', (socket) => {
 
     callback(messageId);
 
-    if (message.kind == 'text') {
+    console.log(message.type);
+    if (message.type === 'text') {
       getLinkMetadata(message.message).then((data) => {
+        console.log(data);
         if (data.success) {
           //everyone in room
           io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
@@ -319,7 +306,6 @@ io.on('connection', (socket) => {
 
 
   socket.on('react', (messageId: string, key: string, userId: string, react: string) => {
-
     //everyone in room including sender
     io.in(`chat:${key}`).emit('react', messageId, userId, react);
   });
