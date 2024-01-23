@@ -2,8 +2,7 @@ import { io } from "./websockets.ts";
 
 import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
 
-// @deno-types="npm:hono"
-import { Hono } from "https://deno.land/x/hono@v3.12.3/mod.ts"
+import { Hono, type Context, type Next } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 
 import { redis } from "./database.ts";
 
@@ -18,7 +17,7 @@ const app = new Hono();
 console.log('Hono server instance created');
 
 //set custom headers for all responses
-app.use("*", async (ctx, next) => {
+app.use("*", async (ctx: Context, next: Next) => {
   const start = Date.now();
   ctx.header('X-Server', 'Deno');
   ctx.header('X-Powered-By', 'Hono');
@@ -29,12 +28,12 @@ app.use("*", async (ctx, next) => {
   ctx.header('X-Response-Time', `${ms}ms`);
 });
 
-app.options('*', (ctx) => {
+app.options('*', (ctx: Context) => {
   ctx.status(200);
   return ctx.text('OK');
 });
 
-app.get('/', (ctx) => {
+app.get('/', (ctx: Context) => {
   //random emoji from unicode range
   const emoji = String.fromCodePoint(0x1F600 + Math.floor(Math.random() * 20));
   return ctx.text(`Hello from Poketab - Deno ${emoji}`);
@@ -43,7 +42,7 @@ app.get('/', (ctx) => {
 const MAX_SIZE = 50 * 1024 * 1024;
 
 //file upload
-app.post('/upload/:key/:uid', async (ctx) => {
+app.post('/upload/:key/:uid', async (ctx: Context) => {
 
   try {
     console.log('Upload request received');
@@ -136,7 +135,7 @@ app.post('/upload/:key/:uid', async (ctx) => {
 });
 
 //file download
-app.get('/download/:key/:fileId', async (ctx) => {
+app.get('/download/:key/:fileId', async (ctx: Context) => {
 
   try {
     console.log('Download request received');
