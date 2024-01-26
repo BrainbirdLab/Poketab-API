@@ -1,16 +1,13 @@
 import { io } from "./websockets.ts";
 
-import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
-
 import { Hono, type Context, type Next } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 
 import { redis } from "./database.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
+import { SharedFile } from "./database.ts";
 
 const { clienturl } = Deno.env.toObject();
-
-const port = 3000;
 
 const app = new Hono();
 
@@ -126,6 +123,17 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
 
     console.log('File written');
 
+    const fileData: SharedFile = {
+      originalName: file.name,
+      sendBy: uid,
+      recievedBy: [],
+    };
+
+    //add file data to redis
+    const res = await redis.sendCommand('JSON.SET', [`chat:${key}`, `sharedFiles.${fileId}`, JSON.stringify(fileData)])
+
+    console.log(res);
+
     return ctx.json({ message: 'File uploaded', fileId });
   } catch (_) {
     console.log(_);
@@ -154,11 +162,9 @@ app.get('/download/:key/:fileId', async (ctx: Context) => {
 });
 
 
-const handler = io.handler(async (req) => {
+export const handler = io.handler(async (req) => {
   //upgrade to websocket
   return await app.fetch(req) || new Response(null, { status: 404 });
 });
 
 console.log('Socket-io binded to Hono server');
-
-await serve(handler, { port: +port });

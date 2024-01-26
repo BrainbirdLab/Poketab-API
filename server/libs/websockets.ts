@@ -42,8 +42,8 @@ io.on('connection', (socket) => {
 
 
     try {
-      //const exists = await redis.exists(`chat:${key}`);
-      const exists = await redis.sendCommand('EXISTS', [`chat:${key}`]);
+
+      const exists = await redis.exists(`chat:${key}`);
 
       if (!exists) {
         console.log('Key Does Not Exist');
@@ -122,18 +122,27 @@ io.on('connection', (socket) => {
         maxUsers,
         admin: uid,
         created: Date.now(),
+        files: {},
       };
 
       socket.join(`chat:${key}`);
       socket.leave(`waitingRoom:${key}`);
       console.log(socket.id, 'left waiting room for key: ', key);
 
+      /*
       await Promise.all([
         //redis.json.set(`chat:${key}`, '.', chatKey),
         //redis.json.set(`socket:${socket.id}`, '.', { name, uid, key }),
         redis.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]),
         redis.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]),
       ]);
+      */
+
+      //Use multi to set multiple keys in one call
+      const tx = redis.tx();
+      tx.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]);
+      tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
+      await tx.flush();
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
 
@@ -197,7 +206,7 @@ io.on('connection', (socket) => {
 
     try {
 
-      if (await redis.sendCommand('EXISTS', [`chat:${key}`])) {
+      if (await redis.exists(`chat:${key}`)) {
 
         //retrive .activeUsers, .maxUsers, and .users from redis in one call
         //const redisData = await redis.json.get(`chat:${key}`, { path: ["activeUsers", "maxUsers", "users"] }) as Key;
@@ -226,6 +235,7 @@ io.on('connection', (socket) => {
           socket.leave(`waitingRoom:${key}`);
           console.log(socket.id, 'left waiting room for key: ', key);
 
+          /*
           await Promise.all([
             //redis.json.set(`chat:${key}`, `.users.${uid}`, me),
             //redis.json.set(`socket:${socket.id}`, '.', { name, uid, key }),
@@ -234,6 +244,14 @@ io.on('connection', (socket) => {
             redis.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]),
             redis.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', 1]),
           ]);
+          */
+
+          //Use multi to set multiple keys in one call
+          const tx = redis.tx();
+          tx.sendCommand('JSON.SET', [`chat:${key}`, `users.${uid}`, JSON.stringify(me)]);
+          tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
+          tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', 1]);
+          await tx.flush();
 
           callback({ success: true, message: 'Chat Joined', key, userId: uid, maxUsers: maxUsers });
 
@@ -333,7 +351,7 @@ async function exitSocket(socket: Socket, key: string) {
   socket.leave(`chat:${key}`);
 
   //if socket not exists in redis, return
-  if (!await redis.sendCommand('EXISTS', [`socket:${socket.id}`])) {
+  if (!await redis.exists(`socket:${socket.id}`)) {
     console.log('Socket no longer exists in database');
     return;
   }
@@ -348,6 +366,7 @@ async function exitSocket(socket: Socket, key: string) {
 
   const { name, uid } = JSON.parse(reply as string) as { name: string, uid: string};
 
+  /*
   //remove user from redis
   await Promise.all([
     //redis.json.del(`socket:${socket.id}`),
@@ -357,6 +376,14 @@ async function exitSocket(socket: Socket, key: string) {
     redis.sendCommand('JSON.DEL', [`chat:${key}`, `users.${uid}`]),
     redis.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', -1]),
   ]);
+  */
+
+  //Use multi to set multiple keys in one call
+  const tx = redis.tx();
+  tx.sendCommand('JSON.DEL', [`socket:${socket.id}`]);
+  tx.sendCommand('JSON.DEL', [`chat:${key}`, `users.${uid}`]);
+  tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', -1]);
+  await tx.flush();
 
   console.log(`User ${name} left ${key}`);
   
