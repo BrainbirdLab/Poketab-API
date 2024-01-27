@@ -2,10 +2,10 @@ import { io } from "./websockets.ts";
 
 import { Hono, type Context, type Next } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 
-import { redis } from "./database.ts";
+import { redis } from "../db/database.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
-import { SharedFile } from "./database.ts";
+import { SharedFile } from "../db/database.ts";
 
 const { clienturl } = Deno.env.toObject();
 

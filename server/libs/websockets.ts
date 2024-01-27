@@ -1,10 +1,10 @@
 
 import { getRandomKey } from './keyGen.ts';
-import { Key, User } from './database.ts';
+import { Key, User } from '../db/database.ts';
 import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
 import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
-import { redis } from "./database.ts";
+import { redis } from "../db/database.ts";
 
 const { clienturl } = Deno.env.toObject();
 
@@ -18,11 +18,22 @@ export const io = new Server({
 
 console.log('Socket.io server initialized');
 
+async function getAllUsersData(key: string){
+  
+  //load lua scripts
+  const getAllUsersDataScript = await Deno.readTextFile('server/db/lua/getAllUsersData.lua');
+  
+  console.log('Lua scripts loaded');
+  const result = await redis.eval(getAllUsersDataScript, [], [key]) as string;
+
+  return JSON.parse(result);
+}
+
 io.on('connection', (socket) => {
 
   console.log('Socket Connected');
 
-  socket.on('fetchKeyData', async (key: string, callback: (data: object | null) => void) => {
+  socket.on('fetchKeyData', async (key: string, ssr: boolean, callback: (data: object | null) => void) => {
 
     if (!redis.isConnected) {
       console.log('Redis not connected');
@@ -52,23 +63,30 @@ io.on('connection', (socket) => {
       }
 
       //const { activeUsers, maxUsers, users }: Key = await redis.json.get(`chat:${key}`, { path: ["activeUsers", "maxUsers", "users"] }) as Key;
-      const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`, 'activeUsers', 'maxUsers', 'users']);
+      //!const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`, 'activeUsers', 'maxUsers', 'users']);
+      const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
 
-      if (!reply) {
+      if (!keyData) {
         console.log('Key Data Not Found');
         callback({ success: false, message: 'Key Data Not Found', statusCode: 404, icon: 'fa-solid fa-ghost', users: {}, maxUsers: null });
         return;
       }
 
-      const { activeUsers, maxUsers, users } = JSON.parse(reply as string) as Key;
+      //const [ activeUsers, maxUsers ] = keyData as [string, string];
+      const activeUsers = parseInt(keyData[0] as string);
+      const maxUsers = parseInt(keyData[1] as string);
 
       if (activeUsers >= maxUsers) {
         callback({ success: false, message: 'Key Full', statusCode: 401, icon: 'fa-solid fa-door-closed', users: {}, maxUsers: null });
         return;
       }
 
-      socket.join(`waitingRoom:${key}`);
-      console.log(socket.id, 'joined waiting room for key: ', key);
+      const users = await getAllUsersData(key);
+
+      if (!ssr){
+        socket.join(`waitingRoom:${key}`);
+        console.log(socket.id, 'joined waiting room for key: ', key);
+      }
 
       callback({ success: true, message: 'Available', statusCode: 200, icon: '', users: { ...users }, maxUsers: maxUsers });
     } catch (error) {
@@ -76,6 +94,7 @@ io.on('connection', (socket) => {
       callback({ success: false, message: 'Server Error', statusCode: 500, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null });
     }
   });
+
 
   socket.on('createChat', async (name: string, avatar: string, maxUsers: number, callback: (data: object | null) => void) => {
 
@@ -107,51 +126,48 @@ io.on('connection', (socket) => {
       const uid = crypto.randomUUID();
       const key = await getRandomKey();
 
-      const user: User = {
-        name: name,
-        avatar,
-        uid,
-        joined: Date.now(),
-      };
-
       const chatKey: Key = {
-        users: {
-          [uid]: user,
-        },
         activeUsers: 1,
         maxUsers,
         admin: uid,
         created: Date.now(),
-        files: {},
       };
 
       socket.join(`chat:${key}`);
       socket.leave(`waitingRoom:${key}`);
       console.log(socket.id, 'left waiting room for key: ', key);
 
-      /*
-      await Promise.all([
-        //redis.json.set(`chat:${key}`, '.', chatKey),
-        //redis.json.set(`socket:${socket.id}`, '.', { name, uid, key }),
-        redis.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]),
-        redis.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]),
-      ]);
-      */
-
       //Use multi to set multiple keys in one call
       const tx = redis.tx();
-      tx.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]);
-      tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
+      //tx.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]);
+      //tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
+      //hset
+      //chat key or room
+      tx.hset(`chat:${key}`, 'activeUsers', chatKey.activeUsers);
+      tx.hset(`chat:${key}`, 'maxUsers', chatKey.maxUsers);
+      tx.hset(`chat:${key}`, 'admin', chatKey.admin || '');
+      tx.hset(`chat:${key}`, 'created', chatKey.created);
+      
+      //users
+      tx.hset(`chat:${key}:users`, uid, '');
+      //user data
+      tx.hset(`chat:${key}:users:${uid}`, 'name', name);
+      tx.hset(`chat:${key}:users:${uid}`, 'avatar', avatar);
+      tx.hset(`chat:${key}:users:${uid}`, 'uid', uid);
+      tx.hset(`chat:${key}:users:${uid}`, 'joined', Date.now());
+
+      //socket
+      tx.hset(`socket:${socket.id}`, 'name', name);
+      tx.hset(`socket:${socket.id}`, 'uid', uid);
+      tx.hset(`socket:${socket.id}`, 'key', key);
+      
+
       await tx.flush();
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
 
       //get name, avatar, and id of all users in the room
-      const me = {
-        name,
-        avatar,
-        uid,
-      };
+      const me = { name, avatar, uid };
 
       console.log('Chat Created');
       io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
@@ -211,11 +227,14 @@ io.on('connection', (socket) => {
         //retrive .activeUsers, .maxUsers, and .users from redis in one call
         //const redisData = await redis.json.get(`chat:${key}`, { path: ["activeUsers", "maxUsers", "users"] }) as Key;
 
-        const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`,  'activeUsers', 'maxUsers', 'users']);
+        //const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`,  'activeUsers', 'maxUsers', 'users']);
+        const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
 
-        if (reply) {
+        if (keyData) {
 
-          const { activeUsers, maxUsers, users } = JSON.parse(reply as string) as Key;
+          //const { activeUsers, maxUsers, users } = JSON.parse(reply as string) as Key;
+          const activeUsers = parseInt(keyData[0] as string);
+          const maxUsers = parseInt(keyData[1] as string);
 
           if (activeUsers >= maxUsers) {
             callback({ success: false, message: 'Chat Full', icon: 'fa-solid fa-door-closed' });
@@ -235,33 +254,45 @@ io.on('connection', (socket) => {
           socket.leave(`waitingRoom:${key}`);
           console.log(socket.id, 'left waiting room for key: ', key);
 
-          /*
-          await Promise.all([
-            //redis.json.set(`chat:${key}`, `.users.${uid}`, me),
-            //redis.json.set(`socket:${socket.id}`, '.', { name, uid, key }),
-            //redis.json.numIncrBy(`chat:${key}`, '.activeUsers', 1),
-            redis.sendCommand('JSON.SET', [`chat:${key}`, `users.${uid}`, JSON.stringify(me)]),
-            redis.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]),
-            redis.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', 1]),
-          ]);
-          */
-
           //Use multi to set multiple keys in one call
           const tx = redis.tx();
+          /*
           tx.sendCommand('JSON.SET', [`chat:${key}`, `users.${uid}`, JSON.stringify(me)]);
           tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
           tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', 1]);
+          */
+
+          //users
+          tx.hset(`chat:${key}:users`, uid, '');
+
+          //my data
+          tx.hset(`chat:${key}:users:${uid}`, 'name', me.name);
+          tx.hset(`chat:${key}:users:${uid}`, 'avatar', me.avatar);
+          tx.hset(`chat:${key}:users:${uid}`, 'uid', me.uid);
+          tx.hset(`chat:${key}:users:${uid}`, 'joined', me.joined);
+
+
+          //socket
+          tx.hset(`socket:${socket.id}`, 'name', name);
+          tx.hset(`socket:${socket.id}`, 'uid', uid);
+          tx.hset(`socket:${socket.id}`, 'key', key);
+
+          //increment active users
+          tx.hincrby(`chat:${key}`, 'activeUsers', 1);
+          
+          let users: { [key: string]: Omit<User, 'joined'> } = {}; //omit the joined property
+
           await tx.flush();
+          users = await getAllUsersData(key),
 
           callback({ success: true, message: 'Chat Joined', key, userId: uid, maxUsers: maxUsers });
-
 
           console.log('Chat Joined');
 
           //log the connected users on that room
           io.in(`chat:${key}`).emit('updateUserList', { ...users, [uid]: me });
           console.log(`sent update user list to ${key}. users count: ${activeUsers + 1}`);
-          socket.in(`waitingRoom:${key}`).emit('updateUserListWR', { ...users, [uid]: me });
+          io.in(`waitingRoom:${key}`).emit('updateUserListWR', { ...users, [uid]: me });
 
           //only sender
           socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
@@ -357,65 +388,55 @@ async function exitSocket(socket: Socket, key: string) {
   }
   //get uid from redis
   //const { name, uid } = await redis.json.get(`socket:${socket.id}`) as { name: string, uid: string, key: string };
-  let reply = await redis.sendCommand('JSON.GET', [`socket:${socket.id}`,  'name', 'uid']);
+  //let reply = await redis.sendCommand('JSON.GET', [`socket:${socket.id}`,  'name', 'uid']);
+  let data = await redis.hmget(`socket:${socket.id}`, 'name', 'uid');
 
-  if (!reply) {
+  if (!data) {
     console.log('Socket Data Not Found');
     return;
   }
 
-  const { name, uid } = JSON.parse(reply as string) as { name: string, uid: string};
-
-  /*
-  //remove user from redis
-  await Promise.all([
-    //redis.json.del(`socket:${socket.id}`),
-    //redis.json.del(`chat:${key}`, `.users.${uid}`),
-    //redis.json.numIncrBy(`chat:${key}`, '.activeUsers', -1),
-    redis.sendCommand('JSON.DEL', [`socket:${socket.id}`]),
-    redis.sendCommand('JSON.DEL', [`chat:${key}`, `users.${uid}`]),
-    redis.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', -1]),
-  ]);
-  */
+  const [ name, uid ] = data as [string, string];
 
   //Use multi to set multiple keys in one call
   const tx = redis.tx();
+  /*
   tx.sendCommand('JSON.DEL', [`socket:${socket.id}`]);
   tx.sendCommand('JSON.DEL', [`chat:${key}`, `users.${uid}`]);
   tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', -1]);
+  */
+
+  //delete socket
+  tx.del(`socket:${socket.id}`);
+  //delete user
+  tx.hdel(`chat:${key}:users`, uid);
+  //delete user data
+  tx.del(`chat:${key}:users:${uid}`);
+  //decrement active users
+  tx.hincrby(`chat:${key}`, 'activeUsers', -1);
+
   await tx.flush();
 
   console.log(`User ${name} left ${key}`);
   
   socket.in(`chat:${key}`).emit('server_message', { text: `${name} left the chat😭`, id: crypto.randomUUID() }, 'leave');
 
-  //const activeUsers = await redis.json.get(`chat:${key}`, { path: ["activeUsers"] }) as number;
-  reply = await redis.sendCommand('JSON.GET', [`chat:${key}`, 'activeUsers']);
+  data = await redis.hmget(`chat:${key}`, 'activeUsers');
 
-  if (!reply) {
+  if (!data) {
     console.log('Empty key');
     return;
   }
 
-  const activeUsers = JSON.parse(reply as string) as number;
+  const [activeUsers] = data as unknown as [number];
 
-  if (activeUsers <= 0) {
-    //delete key from redis
-    //await redis.del(`chat:${key}`);
-    await redis.sendCommand('DEL', [`chat:${key}`]);
-    console.log('Key deleted');
+  if (activeUsers > 0) {
+    console.log(`sent update user list to ${key}. users count: 0`);
+    io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
   } else {
-    //get users from redis
-    //const users = await redis.json.get(`chat:${key}`, { path: ["users"] }) as { [key: string]: User };
-    reply = await redis.sendCommand('JSON.GET', [`chat:${key}`, 'users']);
-
-    if (!reply) {
-      console.log('Empty key');
-      return;
-    }
-
-    const users = JSON.parse(reply as string) as { [key: string]: User };
-
+    redis.del(`chat:${key}`);
+    console.log('Key deleted');
+    const users = await getAllUsersData(key);
     io.in(`chat:${key}`).emit('updateUserList', users);
     console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
     io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);

@@ -17,16 +17,6 @@ await redis.sendCommand('FLUSHALL');
 
 console.log('Redis connected');
 
-//dummy chat key and uid
-
-await redis.sendCommand('JSON.set', ['chat:dummy', '.', JSON.stringify({
-	users: {
-		'user-1': { name: 'User 1', avatar: 'pikachu', uid: 'user1', joined: 'now' },
-	},
-	'sharedFiles': {}
-})]);
-
-
 export type User = {
 	name: string;
 	avatar: string;
@@ -41,12 +31,11 @@ export type SharedFile = {
 }
 
 export type Key = {
-	users: { [key: string]: User };
+	//users: { [key: string]: User };
 	activeUsers: number;
 	maxUsers: number;
 	admin: string | null;
 	created: number;
-
 	// Shared files
-	files: { [id: string]: SharedFile };
+	//files: { [id: string]: SharedFile };
 }

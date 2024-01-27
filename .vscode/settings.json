@@ -1,4 +1,7 @@
 {
     "deno.enable": true,
     "deno.lint": true,
+    "Lua.diagnostics.globals": [
+        "redis"
+    ],
 }
