@@ -5,7 +5,6 @@ import { Hono, type Context, type Next } from "https://deno.land/x/hono@v3.12.4/
 import { redis } from "../db/database.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
-import { SharedFile } from "../db/database.ts";
 
 const { clienturl } = Deno.env.toObject();
 
@@ -38,6 +37,8 @@ app.get('/', (ctx: Context) => {
 
 const MAX_SIZE = 50 * 1024 * 1024;
 
+
+
 //file upload
 app.post('/upload/:key/:uid', async (ctx: Context) => {
 
@@ -48,7 +49,7 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
     const { key, uid } = ctx.req.param();
 
     //check if key and uid exists
-    const exists = await redis.sendCommand('EXISTS', [`chat:${key}`, `users.${uid}`]);
+    const exists = await redis.exists(`chat:${key}:user:${uid}`);
 
     if (!exists){
       console.log('Unauthorized');
@@ -119,20 +120,22 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
 
     await Deno.mkdir(dirName, { recursive: true });
     
-    await Deno.writeFile(`${dirName}/${fileId}`, file.stream());
+    //write file to disk
+    await Deno.writeFile(`${dirName}/${fileId}`, file.stream(), {append: true});
 
     console.log('File written');
 
-    const fileData: SharedFile = {
-      originalName: file.name,
-      sendBy: uid,
-      recievedBy: [],
-    };
-
     //add file data to redis
-    const res = await redis.sendCommand('JSON.SET', [`chat:${key}`, `sharedFiles.${fileId}`, JSON.stringify(fileData)])
+    const tx = redis.tx();
+    
+    tx.hset(`chat:${key}:file:${fileId}`, 'originalName', file.name);
+    tx.hset(`chat:${key}:file:${fileId}`, 'sendBy', uid);
+    tx.hset(`chat:${key}:file:${fileId}`, `recievedBy:${uid}`, Date.now());
+    tx.hset(`chat:${key}:file:${fileId}`, 'recievedCount', 0);
 
-    console.log(res);
+    await tx.flush();
+
+    //console.log(res);
 
     return ctx.json({ message: 'File uploaded', fileId });
   } catch (_) {
@@ -155,14 +158,14 @@ app.get('/download/:key/:fileId', async (ctx: Context) => {
 
     return ctx.newResponse(file.readable);
   } catch (_) {
-    console.log(_);
+    console.error(_);
     ctx.status(404);
     return ctx.json({ message: 'Not found' });
   }
 });
 
 
-export const handler = io.handler(async (req) => {
+export const handler = io.handler(async (req: Request) => {
   //upgrade to websocket
   return await app.fetch(req) || new Response(null, { status: 404 });
 });

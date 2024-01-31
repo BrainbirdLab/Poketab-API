@@ -13,7 +13,7 @@ export const redis = await connect({
 });
 
 //delete all keys
-await redis.sendCommand('FLUSHALL');
+await redis.flushdb();
 
 console.log('Redis connected');
 
@@ -22,13 +22,7 @@ export type User = {
 	avatar: string;
 	uid: string;
 	joined: number;
-}
-
-export type SharedFile = {
-	originalName: string;
-	sendBy: string; // User who sent the file
-	recievedBy: string[]; // Users who has downloaded the file
-}
+};
 
 export type Key = {
 	//users: { [key: string]: User };
@@ -38,4 +32,4 @@ export type Key = {
 	created: number;
 	// Shared files
 	//files: { [id: string]: SharedFile };
-}
+};

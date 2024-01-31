@@ -17,15 +17,15 @@ export const io = new Server({
 });
 
 console.log('Socket.io server initialized');
+//load lua scripts
+const getAllUsersDataScript = await Deno.readTextFile('server/db/lua/getAllUsersData.lua');
+
+console.log('Lua scripts loaded');
+
+const SHA = await redis.scriptLoad(getAllUsersDataScript);
 
 async function getAllUsersData(key: string){
-  
-  //load lua scripts
-  const getAllUsersDataScript = await Deno.readTextFile('server/db/lua/getAllUsersData.lua');
-  
-  console.log('Lua scripts loaded');
-  const result = await redis.eval(getAllUsersDataScript, [], [key]) as string;
-
+  const result = await redis.evalsha(SHA, [], [key]) as string;
   return JSON.parse(result);
 }
 
@@ -62,8 +62,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      //const { activeUsers, maxUsers, users }: Key = await redis.json.get(`chat:${key}`, { path: ["activeUsers", "maxUsers", "users"] }) as Key;
-      //!const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`, 'activeUsers', 'maxUsers', 'users']);
       const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
 
       if (!keyData) {
@@ -139,8 +137,6 @@ io.on('connection', (socket) => {
 
       //Use multi to set multiple keys in one call
       const tx = redis.tx();
-      //tx.sendCommand('JSON.SET', [`chat:${key}`, '.', JSON.stringify(chatKey)]);
-      //tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
       //hset
       //chat key or room
       tx.hset(`chat:${key}`, 'activeUsers', chatKey.activeUsers);
@@ -149,12 +145,12 @@ io.on('connection', (socket) => {
       tx.hset(`chat:${key}`, 'created', chatKey.created);
       
       //users
-      tx.hset(`chat:${key}:users`, uid, '');
+      tx.sadd(`chat:${key}:users`, uid);
       //user data
-      tx.hset(`chat:${key}:users:${uid}`, 'name', name);
-      tx.hset(`chat:${key}:users:${uid}`, 'avatar', avatar);
-      tx.hset(`chat:${key}:users:${uid}`, 'uid', uid);
-      tx.hset(`chat:${key}:users:${uid}`, 'joined', Date.now());
+      tx.hset(`chat:${key}:user:${uid}`, 'name', name);
+      tx.hset(`chat:${key}:user:${uid}`, 'avatar', avatar);
+      tx.hset(`chat:${key}:user:${uid}`, 'uid', uid);
+      tx.hset(`chat:${key}:user:${uid}`, 'joined', Date.now());
 
       //socket
       tx.hset(`socket:${socket.id}`, 'name', name);
@@ -224,9 +220,6 @@ io.on('connection', (socket) => {
 
       if (await redis.exists(`chat:${key}`)) {
 
-        //retrive .activeUsers, .maxUsers, and .users from redis in one call
-        //const redisData = await redis.json.get(`chat:${key}`, { path: ["activeUsers", "maxUsers", "users"] }) as Key;
-
         //const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`,  'activeUsers', 'maxUsers', 'users']);
         const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
 
@@ -256,21 +249,15 @@ io.on('connection', (socket) => {
 
           //Use multi to set multiple keys in one call
           const tx = redis.tx();
-          /*
-          tx.sendCommand('JSON.SET', [`chat:${key}`, `users.${uid}`, JSON.stringify(me)]);
-          tx.sendCommand('JSON.SET', [`socket:${socket.id}`, '.', JSON.stringify({ name, uid, key })]);
-          tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', 1]);
-          */
 
           //users
-          tx.hset(`chat:${key}:users`, uid, '');
+          tx.sadd(`chat:${key}:users`, uid);
 
           //my data
-          tx.hset(`chat:${key}:users:${uid}`, 'name', me.name);
-          tx.hset(`chat:${key}:users:${uid}`, 'avatar', me.avatar);
-          tx.hset(`chat:${key}:users:${uid}`, 'uid', me.uid);
-          tx.hset(`chat:${key}:users:${uid}`, 'joined', me.joined);
-
+          tx.hset(`chat:${key}:user:${uid}`, 'name', me.name);
+          tx.hset(`chat:${key}:user:${uid}`, 'avatar', me.avatar);
+          tx.hset(`chat:${key}:user:${uid}`, 'uid', me.uid);
+          tx.hset(`chat:${key}:user:${uid}`, 'joined', me.joined);
 
           //socket
           tx.hset(`socket:${socket.id}`, 'name', name);
@@ -409,9 +396,9 @@ async function exitSocket(socket: Socket, key: string) {
   //delete socket
   tx.del(`socket:${socket.id}`);
   //delete user
-  tx.hdel(`chat:${key}:users`, uid);
+  tx.srem(`chat:${key}:users`, uid);
   //delete user data
-  tx.del(`chat:${key}:users:${uid}`);
+  tx.del(`chat:${key}:user:${uid}`);
   //decrement active users
   tx.hincrby(`chat:${key}`, 'activeUsers', -1);
 
