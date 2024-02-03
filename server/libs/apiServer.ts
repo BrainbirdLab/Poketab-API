@@ -129,13 +129,9 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
     const tx = redis.tx();
     
     tx.hset(`chat:${key}:file:${fileId}`, 'originalName', file.name);
-    tx.hset(`chat:${key}:file:${fileId}`, 'sendBy', uid);
-    tx.hset(`chat:${key}:file:${fileId}`, `recievedBy:${uid}`, Date.now());
     tx.hset(`chat:${key}:file:${fileId}`, 'recievedCount', 0);
 
     await tx.flush();
-
-    //console.log(res);
 
     return ctx.json({ message: 'File uploaded', fileId });
   } catch (_) {

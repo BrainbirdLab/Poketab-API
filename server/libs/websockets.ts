@@ -1,10 +1,12 @@
 
 import { getRandomKey } from './keyGen.ts';
-import { Key, User } from '../db/database.ts';
+import { Key, User, _R_getAllUsersData, _R_exitUserFromSocket } from '../db/database.ts';
 import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
 import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 import { redis } from "../db/database.ts";
+import { _R_deleteChatKey } from '../db/database.ts';
+import { _R_joinChat } from '../db/database.ts';
 
 const { clienturl } = Deno.env.toObject();
 
@@ -17,17 +19,7 @@ export const io = new Server({
 });
 
 console.log('Socket.io server initialized');
-//load lua scripts
-const getAllUsersDataScript = await Deno.readTextFile('server/db/lua/getAllUsersData.lua');
 
-console.log('Lua scripts loaded');
-
-const SHA = await redis.scriptLoad(getAllUsersDataScript);
-
-async function getAllUsersData(key: string){
-  const result = await redis.evalsha(SHA, [], [key]) as string;
-  return JSON.parse(result);
-}
 
 io.on('connection', (socket) => {
 
@@ -79,7 +71,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const users = await getAllUsersData(key);
+      const users = await _R_getAllUsersData(key);
 
       if (!ssr){
         socket.join(`waitingRoom:${key}`);
@@ -124,41 +116,26 @@ io.on('connection', (socket) => {
       const uid = crypto.randomUUID();
       const key = await getRandomKey();
 
-      const chatKey: Key = {
-        activeUsers: 1,
-        maxUsers,
-        admin: uid,
-        created: Date.now(),
-      };
-
       socket.join(`chat:${key}`);
       socket.leave(`waitingRoom:${key}`);
       console.log(socket.id, 'left waiting room for key: ', key);
 
-      //Use multi to set multiple keys in one call
-      const tx = redis.tx();
-      //hset
-      //chat key or room
-      tx.hset(`chat:${key}`, 'activeUsers', chatKey.activeUsers);
-      tx.hset(`chat:${key}`, 'maxUsers', chatKey.maxUsers);
-      tx.hset(`chat:${key}`, 'admin', chatKey.admin || '');
-      tx.hset(`chat:${key}`, 'created', chatKey.created);
-      
-      //users
-      tx.sadd(`chat:${key}:users`, uid);
-      //user data
-      tx.hset(`chat:${key}:user:${uid}`, 'name', name);
-      tx.hset(`chat:${key}:user:${uid}`, 'avatar', avatar);
-      tx.hset(`chat:${key}:user:${uid}`, 'uid', uid);
-      tx.hset(`chat:${key}:user:${uid}`, 'joined', Date.now());
+      const chatKey: Key = {
+        keyId: key,
+        activeUsers: 1,
+        maxUsers,
+        admin: uid,
+        createdAt: Date.now(),
+      }
 
-      //socket
-      tx.hset(`socket:${socket.id}`, 'name', name);
-      tx.hset(`socket:${socket.id}`, 'uid', uid);
-      tx.hset(`socket:${socket.id}`, 'key', key);
-      
+      const user: User = {
+        name,
+        avatar,
+        uid,
+        joinedAt: Date.now(),
+      }
 
-      await tx.flush();
+      await _R_joinChat(true, chatKey, user, socket.id);
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
 
@@ -169,9 +146,9 @@ io.on('connection', (socket) => {
       io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
       console.log(`sent update user list to ${key}. users count: 1`);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', { [uid]: me });
+      
       //only sender
       socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
-
 
       socket.on('disconnect', async () => {
         console.log(`Chat Socket ${socket.id} Disconnected`);
@@ -183,7 +160,6 @@ io.on('connection', (socket) => {
         console.log('Chat Left');
         callback();
       });
-
 
     } catch (error) {
       console.error(error);
@@ -240,37 +216,18 @@ io.on('connection', (socket) => {
             name: name,
             avatar,
             uid,
-            joined: Date.now(),
+            joinedAt: Date.now(),
           };
 
           socket.join(`chat:${key}`);
           socket.leave(`waitingRoom:${key}`);
           console.log(socket.id, 'left waiting room for key: ', key);
 
-          //Use multi to set multiple keys in one call
-          const tx = redis.tx();
-
-          //users
-          tx.sadd(`chat:${key}:users`, uid);
-
-          //my data
-          tx.hset(`chat:${key}:user:${uid}`, 'name', me.name);
-          tx.hset(`chat:${key}:user:${uid}`, 'avatar', me.avatar);
-          tx.hset(`chat:${key}:user:${uid}`, 'uid', me.uid);
-          tx.hset(`chat:${key}:user:${uid}`, 'joined', me.joined);
-
-          //socket
-          tx.hset(`socket:${socket.id}`, 'name', name);
-          tx.hset(`socket:${socket.id}`, 'uid', uid);
-          tx.hset(`socket:${socket.id}`, 'key', key);
-
-          //increment active users
-          tx.hincrby(`chat:${key}`, 'activeUsers', 1);
+          await _R_joinChat(false, { keyId: key }, me, socket.id);
           
           let users: { [key: string]: Omit<User, 'joined'> } = {}; //omit the joined property
 
-          await tx.flush();
-          users = await getAllUsersData(key),
+          users = await _R_getAllUsersData(key),
 
           callback({ success: true, message: 'Chat Joined', key, userId: uid, maxUsers: maxUsers });
 
@@ -374,8 +331,6 @@ async function exitSocket(socket: Socket, key: string) {
     return;
   }
   //get uid from redis
-  //const { name, uid } = await redis.json.get(`socket:${socket.id}`) as { name: string, uid: string, key: string };
-  //let reply = await redis.sendCommand('JSON.GET', [`socket:${socket.id}`,  'name', 'uid']);
   let data = await redis.hmget(`socket:${socket.id}`, 'name', 'uid');
 
   if (!data) {
@@ -385,24 +340,7 @@ async function exitSocket(socket: Socket, key: string) {
 
   const [ name, uid ] = data as [string, string];
 
-  //Use multi to set multiple keys in one call
-  const tx = redis.tx();
-  /*
-  tx.sendCommand('JSON.DEL', [`socket:${socket.id}`]);
-  tx.sendCommand('JSON.DEL', [`chat:${key}`, `users.${uid}`]);
-  tx.sendCommand('JSON.NUMINCRBY', [`chat:${key}`, 'activeUsers', -1]);
-  */
-
-  //delete socket
-  tx.del(`socket:${socket.id}`);
-  //delete user
-  tx.srem(`chat:${key}:users`, uid);
-  //delete user data
-  tx.del(`chat:${key}:user:${uid}`);
-  //decrement active users
-  tx.hincrby(`chat:${key}`, 'activeUsers', -1);
-
-  await tx.flush();
+  await _R_exitUserFromSocket(key, uid, socket.id);
 
   console.log(`User ${name} left ${key}`);
   
@@ -418,14 +356,15 @@ async function exitSocket(socket: Socket, key: string) {
   const [activeUsers] = data as unknown as [number];
 
   if (activeUsers > 0) {
+    const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
+    console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
+    io.in(`chat:${key}`).emit('updateUserList', users);
+    io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
+  } else {
+    await _R_deleteChatKey(key, socket.id);
+    console.log('Key deleted');
+    io.in(`chat:${key}`).emit('updateUserList', {});
     console.log(`sent update user list to ${key}. users count: 0`);
     io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
-  } else {
-    redis.del(`chat:${key}`);
-    console.log('Key deleted');
-    const users = await getAllUsersData(key);
-    io.in(`chat:${key}`).emit('updateUserList', users);
-    console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
-    io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
   }
 }
