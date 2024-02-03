@@ -4,9 +4,7 @@ export async function getRandomKey() {
 
     const key = makeKey();
     //check if key exists
-    //const keyExists = await redis.exists(key);
-
-    const keyExists = await redis.sendCommand("JSON.GET", [key]);
+    const keyExists = await redis.exists(`chat:${key}`);
 
     if (keyExists) {
         return getRandomKey();
