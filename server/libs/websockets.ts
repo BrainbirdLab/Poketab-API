@@ -155,11 +155,7 @@ io.on('connection', (socket) => {
         await exitSocket(socket, key);
       });
 
-      socket.on('leaveChat', async (callback) => {
-        await exitSocket(socket, key);
-        console.log('Chat Left');
-        callback();
-      });
+      socket.on('leaveChat', (destroy: boolean, callback: () => void) => exitHandler(destroy, key, socket, callback));
 
     } catch (error) {
       console.error(error);
@@ -249,12 +245,7 @@ io.on('connection', (socket) => {
             await exitSocket(socket, key);
           });
 
-          socket.on('leaveChat', async (callback) => {
-            await exitSocket(socket, key);
-            console.log('Chat Left');
-            callback();
-          });
-
+          socket.on('leaveChat', (destroy: boolean, callback: () => void) => exitHandler(destroy, key, socket, callback));
 
         } else {
           // Handle the case where the data doesn't exist or is null.
@@ -319,6 +310,25 @@ io.on('connection', (socket) => {
     io.in(`chat:${key}`).emit('location', position, messageId, uid);
   });
 });
+
+async function exitHandler (destroy: boolean, key: string, socket: Socket, callback: () => void){
+  /*
+  await exitSocket(socket, key);
+  console.log('Chat Left');
+  callback();
+  */
+  if (destroy) {
+    await _R_deleteChatKey(key, socket.id);
+    console.log('Key deleted');
+    io.in(`chat:${key}`).emit('selfDestruct');
+    console.log(`sent self destruct to ${key}`);
+    io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+  } else {
+    await exitSocket(socket, key);
+    console.log('Chat Left');
+    callback();
+  }
+}
 
 async function exitSocket(socket: Socket, key: string) {
 
