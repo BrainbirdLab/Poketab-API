@@ -22,40 +22,45 @@
 #define SOCKET_CLOSE(sock) close(sock)
 #endif
 
+//Request and Response classes
 class Request {
 public:
-    std::string method;
-    std::string path;
-    std::string body;
+    std::string method; // GET, POST, PUT, DELETE
+    std::string path; // /about, /contact
+    std::string body; 
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> query;
-    std::map<std::string, std::string> params;
+    std::map<std::string, std::string> params; // /post/:id
 
     Request() {}
 };
 
 class Response {
 public:
-    std::string status;
+    std::string status; // 200 OK, 404 Not Found
     std::string body;
     std::string headers;
 
+    // Overload the << operator to append data to the body. Like res << "Hello World";
     template <typename T>
     Response& operator<<(const T& data) {
         body += data;
         return *this;
     }
 
+    // Add a header to the response
     Response& header(const std::string& key, const std::string& value) {
         headers += key + ": " + value + "\r\n";
         return *this;
     }
 
+    // Set the status code of the response
     Response& status_code(const int& code) {
         status = std::to_string(code) + " OK\r\n";
         return *this;
     }
 
+    // Send an HTML file as the response
     Response& html(const std::string& path){
         header("Content-Type", "text/html");
         std::fstream file(path, std::ios::in | std::ios::binary);
@@ -68,32 +73,37 @@ public:
         return *this;
     }
 
+    // Send a JSON response
     Response& json(const std::string& data) {
         header("Content-Type", "application/json");
         body = data;
         return *this;
     }
 
+    //Response constructor
     Response() {
         status = "200 OK\r\n";
     }
 };
 
+// Split a string by a delimiter. Used to parse the request path.
+// Example: split("/about/us", '/') => ["", "about", "us"]
 std::vector<std::string> split_(const std::string& path, char delimiter) {
     std::vector<std::string> tokens;
     std::string token;
-    std::istringstream iss(path);
+    std::istringstream iss(path); // Convert the string to a stream
     while (std::getline(iss, token, delimiter)) {
-        tokens.push_back(token);
+        tokens.push_back(token); // Add the token to the vector
     }
     return tokens;
 }
 
+// HTTP server class
 class http_server {
 public:
     http_server() {
-        WSADATA wsaData;
-        int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        WSADATA wsaData; // Initialize Winsock
+        int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData); // Start Winsock
         if (iResult != 0) {
             std::cerr << "WSAStartup failed: " << iResult << std::endl;
             return;
@@ -104,22 +114,23 @@ public:
         WSACleanup();
     }
 
-
+    // Set the public directory path
     void publicDir(const std::string& dir) {
         publicDirPath = dir;
     }
 
+    // Start the server on the specified port
     void start(int port) {
-        SOCKET listen_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        SOCKET listen_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); // Create a socket
         if (listen_socket == INVALID_SOCKET) {
             std::cerr << "Error at socket(): " << WSAGetLastError() << std::endl;
             return;
         }
 
-        sockaddr_in service;
-        service.sin_family = AF_INET;
-        service.sin_addr.s_addr = INADDR_ANY;
-        service.sin_port = htons(port);
+        sockaddr_in service; // The sockaddr_in structure specifies the address family, IP address, and port for the socket that is being bound
+        service.sin_family = AF_INET;  // The Internet Protocol version 4 (IPv4) address family
+        service.sin_addr.s_addr = INADDR_ANY; // IP address of the server
+        service.sin_port = htons(port); // The port number
 
         if (bind(listen_socket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR) {
             std::cerr << "bind() failed." << std::endl;
@@ -136,36 +147,42 @@ public:
         std::cout << "Server is listening on port " << port << std::endl;
 
         while (true) {
-            SOCKET client_socket = accept(listen_socket, NULL, NULL);
+            SOCKET client_socket = accept(listen_socket, NULL, NULL); // Accept a client socket
             if (client_socket == INVALID_SOCKET) {
                 std::cerr << "accept failed: " << WSAGetLastError() << std::endl;
                 SOCKET_CLOSE(listen_socket);
-                WSACleanup();
+                WSACleanup(); // Clean up Winsock
                 return;
             }
 
-            std::thread t(&http_server::handle_client, this, client_socket);
+            std::thread t(&http_server::handle_client, this, client_socket); // Create a new thread to handle the client
             t.detach();
         }
     }
 
+    // Add a new route with a GET method
     void get(const std::string& path, std::function<void(Request&, Response&)> callback) {
         assignHandler("GET", path, callback);
     }
 
+    // Add a new route with a POST method
     void post(const std::string& path, std::function<void(Request&, Response&)> callback) {
         assignHandler("POST", path, callback);
     }
 
 private:
+    // Map to store the routes
     std::map<std::string, std::map<std::string, std::pair<std::string, std::function<void(Request&, Response&)>>>> routes;
+    // Path to the public directory
     std::string publicDirPath;
 
+    // Add event handler to the routes map
     void assignHandler(const std::string& method, const std::string& path, std::function<void(Request&, Response&)> callback){
         std::string newPath = std::regex_replace(path, std::regex("/:\\w+/?"), "/([^/]+)/?");
         routes[method][newPath] = std::pair<std::string, std::function<void(Request&, Response&)>>(path, callback);
     }
 
+    // Handle the client request
     void handle_client(SOCKET client_socket) {
         std::string request = read_request(client_socket);
         std::string method = request.substr(0, request.find(' '));
@@ -173,7 +190,7 @@ private:
 
         Response response;
         Request req;
-        // Extract query parameters from path
+
         if (path.find('?') != std::string::npos) {
             std::string query_string = path.substr(path.find('?') + 1);
             path = path.substr(0, path.find('?'));
@@ -185,6 +202,7 @@ private:
                 req.query[key] = value;
             }
         }
+
 
         std::smatch match;
         for (auto& route : routes[method]) {
@@ -258,12 +276,13 @@ private:
         }
     }
 
+    // Read the request from the client
     std::string read_request(SOCKET client_socket) {
         std::string request;
-        char buffer[1024];
-        int bytes_received;
+        char buffer[1024]; // Buffer to store the request
+        int bytes_received; // Bytes received from the client
         do {
-            bytes_received = recv(client_socket, buffer, 1024, 0);
+            bytes_received = recv(client_socket, buffer, 1024, 0); // Receive the request
             if (bytes_received > 0) {
                 request.append(buffer, bytes_received);
             }
@@ -283,10 +302,11 @@ private:
 
 int main() {
 
-    http_server server;
+    http_server server; // Create a new server instance
 
-    server.publicDir("public");
+    server.publicDir("public"); // Set the public directory
 
+    // Add a new route
     server.get("/", [](Request& req, Response& res) {
         //send the html file
         res.html("index.html");
@@ -312,6 +332,6 @@ int main() {
         res.json("{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}");
     });
 
-    server.start(4119);
+    server.start(4119); // Start the server on port 4119
     return 0;
 }
