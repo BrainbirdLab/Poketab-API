@@ -1,13 +1,12 @@
-//http server from scratch without 3rd party libraries
-
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <map>
 #include <functional>
 #include <thread>
+#include <chrono>
+#include <regex>
 
-// Platform-specific includes and macros
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -22,12 +21,24 @@
 #define SOCKET_CLOSE(sock) close(sock)
 #endif
 
+class Request {
+public:
+    std::string method;
+    std::string path;
+    std::string body;
+    std::map<std::string, std::string> headers;
+    std::map<std::string, std::string> query;
+    std::map<std::string, std::string> params;
+
+    Request() {}
+};
+
 class Response {
 public:
     std::string status;
     std::string body;
     std::string headers;
-    
+
     int requestTime = 0;
 
     template <typename T>
@@ -46,7 +57,6 @@ public:
         return *this;
     }
 
-    //send html response
     Response& html(const std::string& data) {
         header("Content-Type", "text/html");
         body = data;
@@ -59,6 +69,16 @@ public:
         headers = "Content-Type: text/html\r\n";
     }
 };
+
+std::vector<std::string> split_(const std::string& path, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream iss(path);
+    while (std::getline(iss, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
 
 class http_server {
 public:
@@ -89,13 +109,13 @@ public:
 
         if (bind(listen_socket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR) {
             std::cerr << "bind() failed." << std::endl;
-            closesocket(listen_socket);
+            SOCKET_CLOSE(listen_socket);
             return;
         }
 
-        if (listen(listen_socket, 1) == SOCKET_ERROR) {
+        if (listen(listen_socket, SOMAXCONN) == SOCKET_ERROR) {
             std::cerr << "Error listening on socket." << std::endl;
-            closesocket(listen_socket);
+            SOCKET_CLOSE(listen_socket);
             return;
         }
 
@@ -105,7 +125,7 @@ public:
             SOCKET client_socket = accept(listen_socket, NULL, NULL);
             if (client_socket == INVALID_SOCKET) {
                 std::cerr << "accept failed: " << WSAGetLastError() << std::endl;
-                closesocket(listen_socket);
+                SOCKET_CLOSE(listen_socket);
                 WSACleanup();
                 return;
             }
@@ -115,38 +135,77 @@ public:
         }
     }
 
-    void get(const std::string& path, std::function<void(Response&)> callback) {
-        routes["GET"][path] = callback;
+    void get(const std::string& path, std::function<void(Request&, Response&)> callback) {
+        assignHandler("GET", path, callback);
     }
 
-    void post(const std::string& path, std::function<void(Response&)> callback) {
-        routes["POST"][path] = callback;
+    void post(const std::string& path, std::function<void(Request&, Response&)> callback) {
+        assignHandler("POST", path, callback);
     }
 
 private:
-    std::map<std::string, std::map<std::string, std::function<void(Response&)>>> routes;
+    std::map<std::string, std::map<std::string, std::pair<std::string, std::function<void(Request&, Response&)>>>> routes;
+
+    void assignHandler(const std::string& method, const std::string& path, std::function<void(Request&, Response&)> callback){
+        std::string newPath = std::regex_replace(path, std::regex("/:\\w+/?"), "/([^/]+)/?");
+        routes[method][newPath] = std::pair<std::string, std::function<void(Request&, Response&)>>(path, callback);
+    }
 
     void handle_client(SOCKET client_socket) {
         std::string request = read_request(client_socket);
         std::string method = request.substr(0, request.find(' '));
         std::string path = request.substr(request.find(' ') + 1, request.find(' ', request.find(' ') + 1) - request.find(' ') - 1);
 
-        std::cout << "Request: " << method << " " << path << std::endl;
-
         Response response;
-
-        if (routes.find(method) != routes.end() && routes[method].find(path) != routes[method].end()) {
-            routes[method][path](response);
+        Request req;
+        // Extract query parameters from path
+        if (path.find('?') != std::string::npos) {
+            std::string query_string = path.substr(path.find('?') + 1);
+            path = path.substr(0, path.find('?'));
+            std::istringstream query_iss(query_string);
+            std::string query_pair;
+            while (std::getline(query_iss, query_pair, '&')) {
+                std::string key = query_pair.substr(0, query_pair.find('='));
+                std::string value = query_pair.substr(query_pair.find('=') + 1);
+                req.query[key] = value;
+            }
         }
-        else {
-            response.status_code(404) << "Not Found";
+
+        std::smatch match;
+        for (auto& route : routes[method]) {
+            std::string route_path = route.first;
+
+            if (std::regex_match(path, match, std::regex(route_path))) {
+                std::regex token_regex(":\\w+");
+                std::string originalPath = routes[method][route_path].first;
+
+                std::vector<std::string> tokens = split_(originalPath, '/');
+                while (std::regex_search(originalPath, match, token_regex) ) {
+                    const std::string match_token = match.str();
+                    int position = 0;
+                    for (int i = 0; i < tokens.size(); i++) {
+                        if (tokens[i] == match_token) {
+                            position = i;
+                            break;
+                        }
+                    }
+
+                    std::vector<std::string> path_tokens = split_(path, '/');
+                    req.params[match_token.substr(1)] = path_tokens[position];
+
+                    originalPath = match.suffix();
+                }
+
+                routes[method][route_path].second(req, response);
+                send_response(client_socket, response);
+                SOCKET_CLOSE(client_socket);
+                return;
+            }
         }
 
-        //add response headers
-        //response << "HTTP/1.1 200 OK\r\nContent-Length: " << response.str().size() << "\r\n\r\n";
-
+        response.status_code(404) << "404 Not Found";
         send_response(client_socket, response);
-        closesocket(client_socket);
+        SOCKET_CLOSE(client_socket);
     }
 
     std::string read_request(SOCKET client_socket) {
@@ -163,7 +222,6 @@ private:
     }
 
     void send_response(SOCKET client_socket, Response response) {
-
         response.header("Content-Length", std::to_string(response.body.size()));
         response.header("X-Powered-By", "Xebec-Server/0.1.0");
         response.header("Programming-Language", "C++");
@@ -175,40 +233,26 @@ private:
     }
 };
 
-
-// Example usage. Demo html
-std::string html = R"(
-<!DOCTYPE html>
-<html>
-<head>
-    <title>HTTP Server</title>
-</head>
-<body>
-    <h1>Hello, World!</h1>
-    <p>This is a simple HTTP server written in C++.</p>
-
-    <a href="/">Home</a>
-    <a href="/about">About</a>
-    <a href="/contact">Contact</a>
-    
-</body>
-</html>
-)";
-
-
-
 int main() {
     http_server server;
-    server.get("/", [](Response& response) {
-        response << html;
+    server.get("/", [](Request& req, Response& res) {
+        res << "<h1>Hello, World!</h1><p>This is a simple HTTP server written in C++.</p>";
     });
 
-    server.get("/about", [](Response& response) {
-        response.status_code(301) << "About page";
+    server.get("/about", [](Request& req, Response& res) {
+        res.status_code(301) << "About page";
     });
 
-    server.get("/contact", [](Response& response) {
-        response << "Contact page";
+    server.get("/contact", [](Request& req, Response& res) {
+        res << "Contact page";
+    });
+
+    server.post("/post", [](Request& req, Response& res) {
+        res << "POST request";
+    });
+
+    server.post("/post/:id", [](Request& req, Response& res) {
+        res << "POST request with id: " << req.params["id"];
     });
 
     server.start(4119);
