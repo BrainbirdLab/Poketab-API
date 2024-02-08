@@ -20,7 +20,6 @@ export const io = new Server({
 
 console.log('Socket.io server initialized');
 
-
 io.on('connection', (socket) => {
 
   console.log('Socket Connected');
@@ -155,7 +154,7 @@ io.on('connection', (socket) => {
         await exitSocket(socket, key);
       });
 
-      socket.on('leaveChat', (destroy: boolean, callback: () => void) => exitHandler(destroy, key, socket, callback));
+      socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
 
     } catch (error) {
       console.error(error);
@@ -245,7 +244,7 @@ io.on('connection', (socket) => {
             await exitSocket(socket, key);
           });
 
-          socket.on('leaveChat', (destroy: boolean, callback: () => void) => exitHandler(destroy, key, socket, callback));
+          socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
 
         } else {
           // Handle the case where the data doesn't exist or is null.
@@ -311,22 +310,20 @@ io.on('connection', (socket) => {
   });
 });
 
-async function exitHandler (destroy: boolean, key: string, socket: Socket, callback: () => void){
-  /*
-  await exitSocket(socket, key);
-  console.log('Chat Left');
-  callback();
-  */
+async function exitHandler (destroy: boolean, key: string, socket: Socket){
   if (destroy) {
     await _R_deleteChatKey(key, socket.id);
     console.log('Key deleted');
-    io.in(`chat:${key}`).emit('selfDestruct');
+    io.in(`chat:${key}`).emit('selfDestruct', 'Chat destroyed🥺');
     console.log(`sent self destruct to ${key}`);
     io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+    //empty the chat room
+    socket.rooms.delete(`chat:${key}`);
+    socket.rooms.delete(`waitingRoom:${key}`);
   } else {
     await exitSocket(socket, key);
     console.log('Chat Left');
-    callback();
+    socket.emit('selfDestruct', 'You left the chat🥺');
   }
 }
 
@@ -373,8 +370,6 @@ async function exitSocket(socket: Socket, key: string) {
   } else {
     await _R_deleteChatKey(key, socket.id);
     console.log('Key deleted');
-    io.in(`chat:${key}`).emit('updateUserList', {});
-    console.log(`sent update user list to ${key}. users count: 0`);
     io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
   }
 }

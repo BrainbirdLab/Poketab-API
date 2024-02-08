@@ -37,8 +37,6 @@ app.get('/', (ctx: Context) => {
 
 const MAX_SIZE = 50 * 1024 * 1024;
 
-
-
 //file upload
 app.post('/upload/:key/:uid', async (ctx: Context) => {
 
