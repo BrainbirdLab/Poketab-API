@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <map>
 #include <functional>
 #include <thread>
@@ -57,16 +58,27 @@ public:
         return *this;
     }
 
-    Response& html(const std::string& data) {
+    Response& html(const std::string& path){
         header("Content-Type", "text/html");
+        std::fstream file(path, std::ios::in | std::ios::binary);
+        if(file.is_open()){
+            body = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+        } else {
+            status_code(404) << "File Not Found";
+        }
+        return *this;
+    }
+
+    Response& json(const std::string& data) {
+        header("Content-Type", "application/json");
         body = data;
         return *this;
     }
 
     Response() {
-        requestTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        requestTime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
         status = "200 OK\r\n";
-        headers = "Content-Type: text/html\r\n";
     }
 };
 
@@ -93,6 +105,11 @@ public:
 
     ~http_server() {
         WSACleanup();
+    }
+
+
+    void publicDir(const std::string& dir) {
+        publicDirPath = dir;
     }
 
     void start(int port) {
@@ -145,6 +162,7 @@ public:
 
 private:
     std::map<std::string, std::map<std::string, std::pair<std::string, std::function<void(Request&, Response&)>>>> routes;
+    std::string publicDirPath;
 
     void assignHandler(const std::string& method, const std::string& path, std::function<void(Request&, Response&)> callback){
         std::string newPath = std::regex_replace(path, std::regex("/:\\w+/?"), "/([^/]+)/?");
@@ -197,15 +215,51 @@ private:
                 }
 
                 routes[method][route_path].second(req, response);
+                serve_static_file(path, response);
                 send_response(client_socket, response);
                 SOCKET_CLOSE(client_socket);
                 return;
             }
         }
 
-        response.status_code(404) << "404 Not Found";
+        // Serve static files if not matched by any route
+        serve_static_file(path, response);
         send_response(client_socket, response);
         SOCKET_CLOSE(client_socket);
+    }
+
+    void serve_static_file(const std::string& path, Response& response) {
+
+        std::cout << "Serve static file: " << publicDirPath + path << "\n";
+        // Determine the content type based on the file extension
+        std::string content_type;
+        std::string file_extension = path.substr(path.find_last_of('.') + 1);
+        if (file_extension == "html") {
+            content_type = "text/html";
+        } else if (file_extension == "css") {
+            content_type = "text/css";
+        } else if (file_extension == "js") {
+            content_type = "application/javascript";
+        } else if (file_extension == "json") {
+            content_type = "application/json";
+        } else if (file_extension == "jpg" || file_extension == "jpeg") {
+            content_type = "image/jpeg";
+        } else if (file_extension == "png") {
+            content_type = "image/png";
+        } else if (file_extension == "gif") {
+            content_type = "image/gif";
+        } else {
+            // Default to octet-stream for unknown file types
+            content_type = "application/octet-stream";
+        }
+        std::fstream file( publicDirPath + path, std::ios::in | std::ios::binary);
+        if (file) {
+            
+            response << std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+            // Set the response headers
+            response.header("Content-Type", content_type);
+        }
     }
 
     std::string read_request(SOCKET client_socket) {
@@ -225,18 +279,24 @@ private:
         response.header("Content-Length", std::to_string(response.body.size()));
         response.header("X-Powered-By", "Xebec-Server/0.1.0");
         response.header("Programming-Language", "C++");
-        int responseTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() - response.requestTime;
-        response.header("Server-Response-Time", std::to_string(responseTime) + "ms");
+        int responseTime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - response.requestTime;
+        response.header("Server-Response-Time", std::to_string(responseTime) + " nanoseconds");
         response.headers += "\r\n";
+        std::cout << response.body << std::endl;
         std::string res = "HTTP/1.1 " + response.status + response.headers + response.body;
         send(client_socket, res.c_str(), res.size(), 0);
     }
 };
 
 int main() {
+
     http_server server;
+
+    server.publicDir("public");
+
     server.get("/", [](Request& req, Response& res) {
-        res << "<h1>Hello, World!</h1><p>This is a simple HTTP server written in C++.</p>";
+        //send the html file
+        res.html("index.html");
     });
 
     server.get("/about", [](Request& req, Response& res) {
@@ -253,6 +313,10 @@ int main() {
 
     server.post("/post/:id", [](Request& req, Response& res) {
         res << "POST request with id: " << req.params["id"];
+    });
+
+    server.get("/json", [](Request& req, Response& res) {
+        res.json("{\"name\": \"John\", \"age\": 30, \"city\": \"New York\"}");
     });
 
     server.start(4119);
