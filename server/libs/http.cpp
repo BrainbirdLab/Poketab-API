@@ -40,8 +40,6 @@ public:
     std::string body;
     std::string headers;
 
-    int requestTime = 0;
-
     template <typename T>
     Response& operator<<(const T& data) {
         body += data;
@@ -77,7 +75,6 @@ public:
     }
 
     Response() {
-        requestTime = std::chrono::high_resolution_clock::now().time_since_epoch().count();
         status = "200 OK\r\n";
     }
 };
@@ -278,8 +275,6 @@ private:
         response.header("Content-Length", std::to_string(response.body.size()));
         response.header("X-Powered-By", "Xebec-Server/0.1.0");
         response.header("Programming-Language", "C++");
-        int responseTime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - response.requestTime;
-        response.header("Server-Response-Time", std::to_string(responseTime) + " nanoseconds");
         response.headers += "\r\n";
         std::string res = "HTTP/1.1 " + response.status + response.headers + response.body;
         send(client_socket, res.c_str(), res.size(), 0);
