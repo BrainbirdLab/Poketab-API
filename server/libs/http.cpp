@@ -230,7 +230,6 @@ private:
 
     void serve_static_file(const std::string& path, Response& response) {
 
-        std::cout << "Serve static file: " << publicDirPath + path << "\n";
         // Determine the content type based on the file extension
         std::string content_type;
         std::string file_extension = path.substr(path.find_last_of('.') + 1);
@@ -282,7 +281,6 @@ private:
         int responseTime = std::chrono::high_resolution_clock::now().time_since_epoch().count() - response.requestTime;
         response.header("Server-Response-Time", std::to_string(responseTime) + " nanoseconds");
         response.headers += "\r\n";
-        std::cout << response.body << std::endl;
         std::string res = "HTTP/1.1 " + response.status + response.headers + response.body;
         send(client_socket, res.c_str(), res.size(), 0);
     }
