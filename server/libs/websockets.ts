@@ -154,7 +154,7 @@ io.on('connection', (socket) => {
         await exitSocket(socket, key);
       });
 
-      socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
+      socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket, uid));
 
     } catch (error) {
       console.error(error);
@@ -166,7 +166,7 @@ io.on('connection', (socket) => {
     console.log('joinChat requested');
 
     if (!redis.isConnected) {
-      callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
+      callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation' })
       //try to reconnect
       redis.connect();
       return;
@@ -192,13 +192,14 @@ io.on('connection', (socket) => {
       if (await redis.exists(`chat:${key}`)) {
 
         //const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`,  'activeUsers', 'maxUsers', 'users']);
-        const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
+        const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers', 'admin');
 
         if (keyData) {
 
           //const { activeUsers, maxUsers, users } = JSON.parse(reply as string) as Key;
           const activeUsers = parseInt(keyData[0] as string);
           const maxUsers = parseInt(keyData[1] as string);
+          const admin = keyData[2] as string;
 
           if (activeUsers >= maxUsers) {
             callback({ success: false, message: 'Chat Full', icon: 'fa-solid fa-door-closed' });
@@ -224,7 +225,7 @@ io.on('connection', (socket) => {
 
           users = await _R_getAllUsersData(key),
 
-          callback({ success: true, message: 'Chat Joined', key, userId: uid, maxUsers: maxUsers });
+          callback({ success: true, message: 'Chat Joined', key, userId: uid, admin: admin, maxUsers: maxUsers });
 
           console.log('Chat Joined');
 
@@ -244,7 +245,7 @@ io.on('connection', (socket) => {
             await exitSocket(socket, key);
           });
 
-          socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
+          socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket, uid));
 
         } else {
           // Handle the case where the data doesn't exist or is null.
@@ -310,8 +311,16 @@ io.on('connection', (socket) => {
   });
 });
 
-async function exitHandler (destroy: boolean, key: string, socket: Socket){
+async function exitHandler (destroy: boolean, key: string, socket: Socket, uid: string){
   if (destroy) {
+
+    //delete the chat and empty the room only if the user is the admin
+
+    if (await redis.hget(`chat:${key}`, 'admin') !== uid){
+      console.log('Not an admin');
+      return;
+    }
+
     await _R_deleteChatKey(key, socket.id);
     console.log('Key deleted');
     io.in(`chat:${key}`).emit('selfDestruct', 'Chat destroyed🥺');
