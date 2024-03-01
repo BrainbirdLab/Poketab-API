@@ -5,6 +5,7 @@ import { Hono, type Context, type Next } from "https://deno.land/x/hono@v3.12.4/
 import { redis } from "../db/database.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
+import { RedisValue } from "https://deno.land/x/redis@v0.32.1/mod.ts";
 
 const { clienturl } = Deno.env.toObject();
 
@@ -33,6 +34,36 @@ app.get('/', (ctx: Context) => {
   //random emoji from unicode range
   const emoji = String.fromCodePoint(0x1F600 + Math.floor(Math.random() * 20));
   return ctx.text(`Hello from Poketab - Deno ${emoji}`);
+});
+
+//maintainace break message from admin
+app.get('/mbm/:adminPasskey/:message/:time', (ctx: Context) => {
+  //read env variable
+  const { adminPasskey } = ctx.req.param();
+  const { message } = ctx.req.param();
+  const { time } = ctx.req.param();
+
+  console.log(`Got: ${adminPasskey}, ${message}, ${time}`);
+
+  if (!adminPasskey || !message) {
+    ctx.status(400);
+    return ctx.json({ message: 'Invalid request' });
+  }
+
+  //check if passkey is correct
+  const key = Deno.env.get('adminPasskey');
+
+  if (adminPasskey !== key) {
+    ctx.status(401);
+    return ctx.json({ message: 'Unauthorized' });
+  }
+
+  //send message to all connected clients
+  io.emit('maintainanceBreak', message, parseInt(time));
+
+  ctx.status(200);
+  return ctx.json({ message: 'Message sent' });
+
 });
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -123,13 +154,14 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
 
     console.log('File written');
 
-    //add file data to redis
-    const tx = redis.tx();
-    
-    tx.hset(`chat:${key}:file:${fileId}`, 'originalName', file.name);
-    tx.hset(`chat:${key}:file:${fileId}`, 'recievedCount', 0);
+    const fieldValues: [string, RedisValue][] = [
+      ['originalName', file.name],
+      ['recievedCount', 0]
+    ];
 
-    await tx.flush();
+    //add file data to redis
+    await redis.hset(`chat:${key}:file:${fileId}`, ...fieldValues);
+    //tx.hset(`chat:${key}:file:${fileId}`, 'recievedCount', 0);
 
     return ctx.json({ message: 'File uploaded', fileId });
   } catch (_) {

@@ -22,7 +22,7 @@ console.log('Socket.io server initialized');
 
 io.on('connection', (socket) => {
 
-  console.log('Socket Connected');
+  console.log('Socket Connected. ID: ', socket.id);
 
   socket.on('fetchKeyData', async (key: string, ssr: boolean, callback: (data: object | null) => void) => {
 
@@ -61,7 +61,6 @@ io.on('connection', (socket) => {
         return;
       }
 
-      //const [ activeUsers, maxUsers ] = keyData as [string, string];
       const activeUsers = parseInt(keyData[0] as string);
       const maxUsers = parseInt(keyData[1] as string);
 
