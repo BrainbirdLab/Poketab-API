@@ -100,7 +100,7 @@ export async function getLinkMetadata(message: string) {
 				error: 'No valid links found in the message',
 			};
 		}
-	} catch (e) {
+	} catch (_) {
 		//console.error(e);
 		return {
 			success: false,
