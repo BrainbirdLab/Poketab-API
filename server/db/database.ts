@@ -5,6 +5,8 @@ const { host, password, port } = Deno.env.toObject();
 
 console.log('Connecting to Redis');
 
+//console.log(`host: ${host}, port: ${port}, password: ${password}`);
+
 export const redis = await connect({
 	hostname: host,
 	port: +port,
