@@ -15,7 +15,7 @@ export const redis = await connect({
 });
 
 //delete all keys
-await redis.flushdb();
+//await redis.flushdb();
 
 //delete all scripts
 await redis.scriptFlush();

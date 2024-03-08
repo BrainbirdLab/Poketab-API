@@ -68,6 +68,17 @@ app.get('/mbm/:adminPasskey/:message/:time', (ctx: Context) => {
 
 const MAX_SIZE = 50 * 1024 * 1024;
 
+type FileData = {
+  name: string,
+  size: number,
+  type: string,
+  uploadedBy: string,
+  uploadedAt: string,
+
+  downloaded: number,
+  //downloadedBy: string[]
+};
+
 //file upload
 app.post('/upload/:key/:uid', async (ctx: Context) => {
 
@@ -137,6 +148,8 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
       return ctx.json({ message: `File size should be within ${MAX_SIZE} bytes.` });
     }
 
+    const maxUser = await redis.hget(`chat:${key}`, 'maxUsers') as unknown as number;
+
     console.log('Writing file...');
 
     const file = files[0];
@@ -156,7 +169,9 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
 
     const fieldValues: [string, RedisValue][] = [
       ['originalName', file.name],
-      ['recievedCount', 0]
+      ['type', file.type],
+      ['maxDownload', maxUser - 1],
+      ['downloadCount', 0]
     ];
 
     //add file data to redis
@@ -172,17 +187,48 @@ app.post('/upload/:key/:uid', async (ctx: Context) => {
 });
 
 //file download
-app.get('/download/:key/:fileId', async (ctx: Context) => {
+app.get('/download/:key/:userId/:fileId', async (ctx: Context) => {
 
   try {
     console.log('Download request received');
 
-    const { key, fileId } = ctx.req.param();
+    const { key, userId, fileId } = ctx.req.param();
+  
+    const res = await redis.exists(`chat:${key}`, `chat:${key}:user:${userId}`, `chat:${key}:file:${fileId}`);
+
+    console.log(res);
+
+    if (res !== 3){
+      console.log('Unauthorized');
+      ctx.status(401);
+      return ctx.json({ message: 'Unauthorized' });
+    }
 
     //serve file
     const file = await Deno.open(`./uploads/${key}/${fileId}`);
+  
+    //check if this user has not downloaded this file before
+    const [userHasDownloaded, originalName, downloadCount, maxDownload] = await redis.hmget(`chat:${key}:file:${fileId}`, 'downloaded:uid:' + userId, 'originalName', 'downloadCount', 'maxDownload') as [string, string, number, number];
+    if (!userHasDownloaded){
+      redis.hincrby(`chat:${key}:file:${fileId}`, 'downloadCount', 1);
+    }
+    
+    console.log('File served');
+    
+    ctx.newResponse(file.readable, {
+      headers: new Headers({
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${originalName}"`,
+      }),
+    });
 
-    return ctx.newResponse(file.readable);
+    //if download is > 10, delete the file
+    if (downloadCount && Number(downloadCount) >= maxDownload){
+      await redis.del(`chat:${key}:file:${fileId}`);
+      await Deno.remove(`./uploads/${key}/${fileId}`);
+      console.log('File deleted');
+    }
+
   } catch (_) {
     console.error(_);
     ctx.status(404);
