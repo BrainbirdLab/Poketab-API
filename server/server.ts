@@ -4,7 +4,6 @@ console.log("Booting up...");
 
 import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
 import { handler } from "./libs/apiServer.ts";
-import "./libs/fileHandler.ts";
 
 const port = 3000;
 

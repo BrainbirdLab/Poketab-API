@@ -287,7 +287,6 @@ io.on('connection', (socket) => {
     io.in(`chat:${key}`).emit('deleteMessage', messageId, userId);
   });
 
-
   socket.on('react', (messageId: string, key: string, userId: string, react: string) => {
     //everyone in room including sender
     io.in(`chat:${key}`).emit('react', messageId, userId, react);
