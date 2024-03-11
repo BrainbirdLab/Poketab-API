@@ -38,6 +38,14 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
       return ctx.json({ message: 'Unauthorized' });
     }
 
+    const activeUsers = await redis.hget(`chat:${key}`, 'activeUsers') as unknown as number;
+
+    if (Number(activeUsers) < 2){
+      //console.log('Not enough users');
+      ctx.status(400);
+      return ctx.json({ message: 'Not enough users' });
+    }
+
     //check file size before parsing form
     const contentLength = ctx.req.header('content-length');
 
