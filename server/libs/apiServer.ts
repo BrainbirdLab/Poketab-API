@@ -38,7 +38,7 @@ app.route('/api', fileHandler);
 app.get('/', (ctx) => {
   //random emoji from unicode range
   const emoji = String.fromCodePoint(0x1F600 + Math.floor(Math.random() * 20));
-  return ctx.text(`Hello from Poketab - Deno ${emoji}`);
+  return ctx.text(`Hello from Poketab - ${emoji}`);
 });
 
 //maintainace break message from admin
@@ -48,7 +48,7 @@ app.get('/mbm/:adminPasskey/:message/:time', (ctx) => {
   const { message } = ctx.req.param();
   const { time } = ctx.req.param();
 
-  console.log(`Got: ${adminPasskey}, ${message}, ${time}`);
+  //console.log(`Got: ${adminPasskey}, ${message}, ${time}`);
 
   if (!adminPasskey || !message) {
     ctx.status(400);
