@@ -4,6 +4,7 @@ import { redis } from "../db/database.ts";
 
 import { io } from "./websockets.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
+import { cleanupFolder } from "./utils.ts";
 
 const app = new Hono();
 
@@ -181,14 +182,7 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
   
       //console.log('File deleted');
       //if './uploads/key' is empty, delete the directory
-      Deno.stat(`./uploads/${key}`)
-          .then(async (dir) => {
-              if (dir.isDirectory && dir.size === 0){
-                  await Deno.remove(`./uploads/${key}`);
-                  console.log('Directory deleted');
-              }
-          }
-      ).catch(() => {});
+      await cleanupFolder(key, true);
     }
   }
 });

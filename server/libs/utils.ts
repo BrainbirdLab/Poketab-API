@@ -108,3 +108,16 @@ export async function getLinkMetadata(message: string) {
 		};
 	}
 }
+
+export async function cleanupFolder(path: string, onlyEmpty = false){
+	try{
+		const dir = await Deno.stat(`./uploads/${path}`);
+		//if onlyEmpty is false, ignore the dir.size check
+		if (dir.isDirectory && onlyEmpty && dir.size > 0) {
+			return;
+		}
+		await Deno.remove(`./uploads/${path}`, { recursive: true });
+	} catch(_){
+		return;
+	}
+}

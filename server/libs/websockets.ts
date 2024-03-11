@@ -7,6 +7,7 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 import { redis } from "../db/database.ts";
 import { _R_deleteChatKey } from '../db/database.ts';
 import { _R_joinChat } from '../db/database.ts';
+import { cleanupFolder } from './utils.ts';
 
 const { clienturl } = Deno.env.toObject();
 
@@ -364,6 +365,11 @@ async function exitSocket(socket: Socket, key: string) {
 
   if (!data) {
     //console.log('Empty key');
+    //chat is empty.
+    //Delete all files which may be present in the 'uploads' directory
+    
+    cleanupFolder(key);
+
     return;
   }
 
