@@ -127,42 +127,15 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
   }
 });
 
-
-app.use("/download/:key/:userId/:messageId", async (ctx, next) => {
-  console.log("Download middleware");
-
-  const { key, messageId } = ctx.req.param();
-
-  await next();
-
-  console.log('File served');
-  const [ downloadCount, maxDownload ] = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload') as unknown as [number, number];
-  if (downloadCount && Number(downloadCount + 1) >= maxDownload){
-
-    await redis.del(`chat:${key}:file:${messageId}`);
-    await Deno.remove(`./uploads/${key}/${messageId}`);
-
-    console.log('File deleted');
-    //if './uploads/key' is empty, delete the directory
-    Deno.stat(`./uploads/${key}`)
-        .then(async (dir) => {
-            if (dir.isDirectory && dir.size === 0){
-                await Deno.remove(`./uploads/${key}`);
-                console.log('Directory deleted');
-            }
-        }
-    ).catch(() => {});
-  }
-});
-
 //file download
 app.get('/download/:key/:userId/:messageId', async (ctx) => {
 
+  const { key, userId, messageId } = ctx.req.param();
+
   try {
+
     console.log('Download request received');
 
-    const { key, userId, messageId } = ctx.req.param();
-  
     const res = await redis.exists(`chat:${key}`, `chat:${key}:user:${userId}`, `chat:${key}:file:${messageId}`);
 
     console.log(res);
@@ -174,22 +147,53 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
     }
 
     //check if this user has not downloaded this file before
-    const userHasDownloaded = await redis.hget(`chat:${key}:file:${messageId}`, 'downloaded:uid:' + userId) as string;
+    const [userHasDownloaded, originalName] = await redis.hmget(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 'originalName') as unknown as [string, string];
     
-    if (!userHasDownloaded){
+    if (userHasDownloaded === '1'){
+      /*
       redis.hincrby(`chat:${key}:file:${messageId}`, 'downloadCount', 1);
+      redis.hset(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 1);
+      */
+      const tx = redis.tx();
+      tx.hincrby(`chat:${key}:file:${messageId}`, 'downloadCount', 1);
+      tx.hset(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 1);
+      await tx.flush();
     }
 
     console.log('Serving file...');
 
-    const filedata = (await Deno.readFile(`./uploads/${key}/${messageId}`));
+    const file = await Deno.open(`./uploads/${key}/${messageId}`);
+    const size = (await file.stat()).size;
 
     //serve file
-    return ctx.newResponse(filedata);
+    return ctx.newResponse(file.readable, 200, {
+      'Content-Disposition': `attachment; filename=${originalName}`,
+      'Content-Length': size.toString(),
+      'Content-Type': 'application/octet-stream'
+    });
 
   } catch (_) {
     ctx.status(404);
     return ctx.json({ message: 'Not found' });
+  } finally {
+    console.log('File served');
+    const [ downloadCount, maxDownload ] = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload') as unknown as [number, number];
+    if (downloadCount && Number(downloadCount + 1) >= maxDownload){
+  
+      await redis.del(`chat:${key}:file:${messageId}`);
+      await Deno.remove(`./uploads/${key}/${messageId}`);
+  
+      console.log('File deleted');
+      //if './uploads/key' is empty, delete the directory
+      Deno.stat(`./uploads/${key}`)
+          .then(async (dir) => {
+              if (dir.isDirectory && dir.size === 0){
+                  await Deno.remove(`./uploads/${key}`);
+                  console.log('Directory deleted');
+              }
+          }
+      ).catch(() => {});
+    }
   }
 });
 
