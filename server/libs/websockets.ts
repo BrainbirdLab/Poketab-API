@@ -223,7 +223,7 @@ io.on('connection', (socket) => {
           
           let users: { [key: string]: Omit<User, 'joined'> } = {}; //omit the joined property
 
-          users = await _R_getAllUsersData(key),
+          users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
 
           callback({ success: true, message: 'Chat Joined', key, userId: uid, admin: admin, maxUsers: maxUsers });
 

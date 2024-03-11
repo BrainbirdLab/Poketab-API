@@ -5,6 +5,7 @@ import { redis } from "../db/database.ts";
 import { io } from "./websockets.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 import { cleanupFolder } from "./utils.ts";
+import { _R_fileUploadAuth } from "../db/database.ts";
 
 const app = new Hono();
 
@@ -30,7 +31,14 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     const { key, uid, messageId } = ctx.req.param();
 
     //check if key and uid exists
-    const exists = await redis.exists(`chat:${key}:user:${uid}`);
+    //const exists = await redis.exists(`chat:${key}:user:${uid}`);
+    //const activeUsers = await redis.hget(`chat:${key}`, 'activeUsers') as unknown as number;
+
+    const res = await _R_fileUploadAuth(key, uid);
+
+    //console.log(res);
+
+    const [exists, activeUsers] = res as [number, number];
 
     if (!exists){
       //console.log('Unauthorized');
@@ -38,7 +46,6 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
       return ctx.json({ message: 'Unauthorized' });
     }
 
-    const activeUsers = await redis.hget(`chat:${key}`, 'activeUsers') as unknown as number;
 
     if (Number(activeUsers) < 2){
       //console.log('Not enough users');

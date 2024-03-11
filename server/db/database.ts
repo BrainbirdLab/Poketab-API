@@ -45,6 +45,7 @@ const getAllUsersDataScript = await Deno.readTextFile('server/db/lua/getAllUsers
 const deleteChatScript = await Deno.readTextFile('server/db/lua/deleteKey.lua');
 const exitSocketScript = await Deno.readTextFile('server/db/lua/exitSocket.lua');
 const joinChatScript = await Deno.readTextFile('server/db/lua/joinChat.lua');
+const fileUploadAuthScript = await Deno.readTextFile('server/db/lua/fileUploadAuth.lua');
 
 console.log('Lua scripts loaded');
 
@@ -52,6 +53,7 @@ const SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
 const SHA_DELETE_CHAT = await redis.scriptLoad(deleteChatScript);
 const SHA_EXIT_SOCKET = await redis.scriptLoad(exitSocketScript);
 const joinChatScriptSHA = await redis.scriptLoad(joinChatScript);
+const fileUploadAuthSHA = await redis.scriptLoad(fileUploadAuthScript);
 
 export async function _R_getAllUsersData(key: string){
 	try{
@@ -86,6 +88,15 @@ export async function _R_joinChat(create: boolean, key: Key, user: User, socketi
 			user: user,
 			socket: socketid,
 		})]);
+	} catch (err){
+		console.error(err);
+	}
+}
+
+export async function _R_fileUploadAuth(key: string, uid: string){
+	try{
+		const res = await redis.evalsha(fileUploadAuthSHA, [], [key, uid]);
+		return res;
 	} catch (err){
 		console.error(err);
 	}
