@@ -13,7 +13,7 @@ export async function getRandomKey() {
 }
 
 export function makeKey() {
-    const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let key = '';
 
     for (let i = 0; i < 2; i++) {

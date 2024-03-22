@@ -1,16 +1,21 @@
+//external modules
+import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
+import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
+//internal modules
 import { getRandomKey } from './keyGen.ts';
 import { Key, User, _R_getAllUsersData, _R_exitUserFromSocket } from '../db/database.ts';
 import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
-import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
-import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 import { redis } from "../db/database.ts";
 import { _R_deleteChatKey } from '../db/database.ts';
 import { _R_joinChat } from '../db/database.ts';
 import { cleanupFolder } from './utils.ts';
+import type { messageType } from './types.ts';
 
+//get client url from .env file which will be set to CORS
 const { clienturl } = Deno.env.toObject();
 
+//initialize socket.io server
 export const io = new Server({
   cors: {
     origin: clienturl,
@@ -21,6 +26,7 @@ export const io = new Server({
 
 console.log('Socket.io server initialized');
 
+//listen for connection
 io.on('connection', (socket) => {
 
   //console.log('Socket Connected. ID: ', socket.id);
@@ -263,7 +269,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('newMessage', (message, key: string, callback: (data: string | null) => void) => {
+  socket.on('newMessage', (message: messageType, key: string, callback: (data: string | null) => void) => {
 
     const messageId = crypto.randomUUID();
     //broadcast
@@ -275,11 +281,11 @@ io.on('connection', (socket) => {
     if (message.type === 'text') {
       getLinkMetadata(message.message).then((data) => {
         console.log(data);
-        if (data.success) {
+        if (data.data) {
           //everyone in room
           io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
         }
-      });
+      }).catch(() => {});
     }
   });
 

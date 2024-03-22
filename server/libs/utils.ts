@@ -1,3 +1,5 @@
+import { linkRes } from "./types.ts";
+
 export const avList = [
 	'mankey',
 	'meowth',
@@ -54,8 +56,7 @@ export function validateAll(name: string, key: string, avatar: string) {
 	return (validateUserName(name) && validateKey(key) && validateAvatar(avatar));
 }
 
-
-export async function getLinkMetadata(message: string) {
+export async function getLinkMetadata(message: string): Promise<linkRes> {
 
 	try{
 
@@ -91,13 +92,15 @@ export async function getLinkMetadata(message: string) {
 					image,
 					url: urlWithoutPath,
 				},
+				error: null
 			};
 	
 		} else {
 			//console.error('No valid links found in the message.');
 			return {
-				success: false,
-				error: 'No valid links found in the message',
+				success: true,
+				error: null,
+				data: null,
 			};
 		}
 	} catch (_) {
@@ -105,6 +108,7 @@ export async function getLinkMetadata(message: string) {
 		return {
 			success: false,
 			error: 'Error fetching link metadata',
+			data: null,
 		};
 	}
 }
@@ -113,10 +117,14 @@ export async function cleanupFolder(path: string, onlyEmpty = false){
 	try{
 		const dir = await Deno.stat(`./uploads/${path}`);
 		//if onlyEmpty is false, ignore the dir.size check
-		if (dir.isDirectory && onlyEmpty && dir.size > 0) {
+		if (!dir.isDirectory) {
 			return;
 		}
-		await Deno.remove(`./uploads/${path}`, { recursive: true });
+
+		if (onlyEmpty && dir.size > 0){
+			await Deno.remove(`./uploads/${path}`, { recursive: true });
+		}
+		
 	} catch(_){
 		return;
 	}
