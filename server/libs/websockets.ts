@@ -280,7 +280,7 @@ io.on('connection', (socket) => {
     //console.log(message.type);
     if (message.type === 'text') {
       getLinkMetadata(message.message).then((data) => {
-        console.log(data);
+        //console.log(data);
         if (data.data) {
           //everyone in room
           io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
