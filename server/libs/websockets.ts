@@ -5,7 +5,7 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 //internal modules
 import { getRandomKey } from './keyGen.ts';
 import { Key, User, _R_getAllUsersData, _R_exitUserFromSocket } from '../db/database.ts';
-import { validateAvatar, validateKey, validateUserName, getLinkMetadata } from './utils.ts';
+import { validatepokemon, validateKey, getLinkMetadata } from './utils.ts';
 import { redis } from "../db/database.ts";
 import { _R_deleteChatKey } from '../db/database.ts';
 import { _R_joinChat } from '../db/database.ts';
@@ -33,24 +33,22 @@ io.on('connection', (socket) => {
 
   socket.on('fetchKeyData', async (key: string, ssr: boolean, callback: (data: object | null) => void) => {
 
-    if (!redis.isConnected) {
-      console.log('Redis not connected');
-      redis.connect();
-      callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
-      return;
-    }
-
-    //console.log('fetchKeyData for key: ', key);
-
-    if (!validateKey(key)) {
-      callback({ success: false, message: 'Invalid Key', statusCode: 400, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null });
-      return;
-    }
-
-    //console.log('Searching database...');
-
-
     try {
+      if (!redis.isConnected) {
+        console.log('Redis not connected');
+        redis.connect();
+        callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
+        return;
+      }
+
+      //console.log('fetchKeyData for key: ', key);
+
+      if (!validateKey(key)) {
+        callback({ success: false, message: 'Invalid Key', statusCode: 400, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null });
+        return;
+      }
+
+      //console.log('Searching database...');
 
       const exists = await redis.exists(`chat:${key}`);
 
@@ -78,7 +76,7 @@ io.on('connection', (socket) => {
 
       const users = await _R_getAllUsersData(key);
 
-      if (!ssr){
+      if (!ssr) {
         socket.join(`waitingRoom:${key}`);
         console.log(socket.id, 'joined waiting room for key: ', key);
       }
@@ -91,33 +89,28 @@ io.on('connection', (socket) => {
   });
 
 
-  socket.on('createChat', async (name: string, avatar: string, maxUsers: number, callback: (data: object | null) => void) => {
-
-    //console.log('createChat requested');
-
-    if (!redis.isConnected) {
-      callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
-      //try to reconnect
-      redis.connect();
-      return;
-    }
-
-    if (!validateUserName(name)) {
-      callback({ success: false, message: 'Invalid name', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
-
-    if (!validateAvatar(avatar)) {
-      callback({ success: false, message: 'Invalid Avatar', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
-
-    if (maxUsers < 2 || maxUsers > 10) {
-      callback({ success: false, message: 'Invalid Max Users', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
+  socket.on('createChat', async (pokemon: string, maxUsers: number, callback: (data: object | null) => void) => {
 
     try {
+      //console.log('createChat requested');
+
+      if (!redis.isConnected) {
+        callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
+        //try to reconnect
+        redis.connect();
+        return;
+      }
+
+      if (!validatepokemon(pokemon)) {
+        callback({ success: false, message: 'Invalid pokemon', icon: 'fa-solid fa-triangle-exclamation' });
+        return;
+      }
+
+      if (maxUsers < 2 || maxUsers > 10) {
+        callback({ success: false, message: 'Invalid Max Users', icon: 'fa-solid fa-triangle-exclamation' });
+        return;
+      }
+
       const uid = crypto.randomUUID();
       const key = await getRandomKey();
 
@@ -134,8 +127,7 @@ io.on('connection', (socket) => {
       }
 
       const user: User = {
-        name,
-        avatar,
+        pokemon,
         uid,
         joinedAt: Date.now(),
       }
@@ -144,14 +136,14 @@ io.on('connection', (socket) => {
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
 
-      //get name, avatar, and id of all users in the room
-      const me = { name, avatar, uid };
+      //get pokemon, and id of all users in the room
+      const me = { pokemon, uid };
 
       //console.log('Chat Created');
       io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
       //console.log(`sent update user list to ${key}. users count: 1`);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', { [uid]: me });
-      
+
       //only sender
       socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
 
@@ -168,32 +160,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('joinChat', async (key: string, name: string, avatar: string, callback: (data: object | null) => void) => {
-    console.log('joinChat requested');
-
-    if (!redis.isConnected) {
-      callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation' })
-      //try to reconnect
-      redis.connect();
-      return;
-    }
-
-    if (!validateKey(key)) {
-      callback({ success: false, message: 'Invalid Key', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
-
-    if (!validateUserName(name)) {
-      callback({ success: false, message: 'Invalid name', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
-
-    if (!validateAvatar(avatar)) {
-      callback({ success: false, message: 'Invalid Avatar', icon: 'fa-solid fa-triangle-exclamation' });
-      return;
-    }
-
+  socket.on('joinChat', async (key: string, pokemon: string, callback: (data: object | null) => void) => {
     try {
+
+      console.log('joinChat requested');
+
+      if (!redis.isConnected) {
+        callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation' })
+        //try to reconnect
+        redis.connect();
+        return;
+      }
+
+      if (!validateKey(key)) {
+        callback({ success: false, message: 'Invalid Key', icon: 'fa-solid fa-triangle-exclamation' });
+        return;
+      }
+
+      if (!validatepokemon(pokemon)) {
+        callback({ success: false, message: 'Invalid pokemon', icon: 'fa-solid fa-triangle-exclamation' });
+        return;
+      }
 
       if (await redis.exists(`chat:${key}`)) {
 
@@ -215,8 +202,7 @@ io.on('connection', (socket) => {
           const uid = crypto.randomUUID();
 
           const me: User = {
-            name: name,
-            avatar,
+            pokemon,
             uid,
             joinedAt: Date.now(),
           };
@@ -226,7 +212,7 @@ io.on('connection', (socket) => {
           //console.log(socket.id, 'left waiting room for key: ', key);
 
           await _R_joinChat(false, { keyId: key }, me, socket.id);
-          
+
           let users: { [key: string]: Omit<User, 'joined'> } = {}; //omit the joined property
 
           users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
@@ -244,7 +230,7 @@ io.on('connection', (socket) => {
           socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
 
           //broadcast
-          socket.in(`chat:${key}`).emit('server_message', { text: `${name} joined the that🔥`, id: crypto.randomUUID() }, 'join');
+          socket.in(`chat:${key}`).emit('server_message', { text: `${pokemon} joined the that🔥`, id: crypto.randomUUID() }, 'join');
 
           socket.on('disconnect', async () => {
             console.log(`Chat Socket ${socket.id} Disconnected`);
@@ -285,7 +271,7 @@ io.on('connection', (socket) => {
           //everyone in room
           io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   });
 
@@ -316,79 +302,88 @@ io.on('connection', (socket) => {
   });
 });
 
-async function exitHandler (destroy: boolean, key: string, socket: Socket, uid: string){
-  if (destroy) {
+async function exitHandler(destroy: boolean, key: string, socket: Socket, uid: string) {
 
-    //delete the chat and empty the room only if the user is the admin
+  try {
+    if (destroy) {
 
-    if (await redis.hget(`chat:${key}`, 'admin') !== uid){
-      console.log('Not an admin');
-      return;
+      //delete the chat and empty the room only if the user is the admin
+
+      if (await redis.hget(`chat:${key}`, 'admin') !== uid) {
+        console.log('Not an admin');
+        return;
+      }
+
+      await _R_deleteChatKey(key, socket.id);
+      //console.log('Key deleted');
+      io.in(`chat:${key}`).emit('selfDestruct', 'Chat destroyed🥺');
+      //console.log(`sent self destruct to ${key}`);
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+      //empty the chat room
+      socket.rooms.delete(`chat:${key}`);
+      socket.rooms.delete(`waitingRoom:${key}`);
+    } else {
+      await exitSocket(socket, key);
+      //console.log('Chat Left');
+      socket.emit('selfDestruct', 'You left the chat🥺');
     }
-
-    await _R_deleteChatKey(key, socket.id);
-    //console.log('Key deleted');
-    io.in(`chat:${key}`).emit('selfDestruct', 'Chat destroyed🥺');
-    //console.log(`sent self destruct to ${key}`);
-    io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
-    //empty the chat room
-    socket.rooms.delete(`chat:${key}`);
-    socket.rooms.delete(`waitingRoom:${key}`);
-  } else {
-    await exitSocket(socket, key);
-    //console.log('Chat Left');
-    socket.emit('selfDestruct', 'You left the chat🥺');
+  } catch (error) {
+    console.error(error);
   }
 }
 
 async function exitSocket(socket: Socket, key: string) {
 
-  socket.leave(`waitingRoom:${key}`);
-  socket.leave(`chat:${key}`);
+  try {
+    socket.leave(`waitingRoom:${key}`);
+    socket.leave(`chat:${key}`);
 
-  //if socket not exists in redis, return
-  if (!await redis.exists(`socket:${socket.id}`)) {
-    //console.log('Socket no longer exists in database');
-    return;
-  }
-  //get uid from redis
-  let data = await redis.hmget(`socket:${socket.id}`, 'name', 'uid');
+    //if socket not exists in redis, return
+    if (!await redis.exists(`socket:${socket.id}`)) {
+      //console.log('Socket no longer exists in database');
+      return;
+    }
+    //get uid from redis
+    let data = await redis.hmget(`socket:${socket.id}`, 'pokemon', 'uid');
 
-  if (!data) {
-    //console.log('Socket Data Not Found');
-    return;
-  }
+    if (!data) {
+      //console.log('Socket Data Not Found');
+      return;
+    }
 
-  const [ name, uid ] = data as [string, string];
+    const [pokemon, uid] = data as [string, string];
 
-  await _R_exitUserFromSocket(key, uid, socket.id);
+    await _R_exitUserFromSocket(key, uid, socket.id);
 
-  //console.log(`User ${name} left ${key}`);
-  
-  socket.in(`chat:${key}`).emit('server_message', { text: `${name} left the chat😭`, id: crypto.randomUUID() }, 'leave');
+    //console.log(`User ${pokemon} left ${key}`);
 
-  data = await redis.hmget(`chat:${key}`, 'activeUsers');
+    socket.in(`chat:${key}`).emit('server_message', { text: `${pokemon} left the chat😭`, id: crypto.randomUUID() }, 'leave');
 
-  if (!data) {
-    //console.log('Empty key');
-    //chat is empty.
-    //Delete all files which may be present in the 'uploads' directory
-    
-    cleanupFolder(key);
+    data = await redis.hmget(`chat:${key}`, 'activeUsers');
 
-    return;
-  }
+    if (!data) {
+      //console.log('Empty key');
+      //chat is empty.
+      //Delete all files which may be present in the 'uploads' directory
 
-  const [activeUsers] = data as unknown as [number];
+      cleanupFolder(key);
 
-  if (activeUsers > 0) {
-    const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
-    //console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
-    io.in(`chat:${key}`).emit('updateUserList', users);
-    io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
-  } else {
-    await _R_deleteChatKey(key, socket.id);
-    //console.log('Key deleted');
-    io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+      return;
+    }
+
+    const [activeUsers] = data as unknown as [number];
+
+    if (activeUsers > 0) {
+      const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
+      //console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
+      io.in(`chat:${key}`).emit('updateUserList', users);
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
+    } else {
+      await _R_deleteChatKey(key, socket.id);
+      //console.log('Key deleted');
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+    }
+  } catch (error) {
+    console.error(error);
   }
 }
