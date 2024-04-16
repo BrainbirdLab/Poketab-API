@@ -11,7 +11,9 @@ WORKDIR /app
 COPY . .
 
 # Install Deno
-RUN curl -fsSL https://deno.land/x/install/install.sh | sh
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh \
+    && export DENO_INSTALL="/root/.deno" \
+    && export PATH="$DENO_INSTALL/bin:$PATH"
 
 RUN deno cache server/server.ts
 
