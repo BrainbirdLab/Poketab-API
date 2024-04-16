@@ -15,6 +15,6 @@ RUN curl -fsSL https://deno.land/x/install/install.sh | sh
 
 RUN deno cache server/server.ts
 
-EXPOSE 8000 
+EXPOSE 3000 
 
 CMD ["deno", "run", "-A", "server/server.ts"]
