@@ -15,8 +15,11 @@ RUN curl -fsSL https://deno.land/x/install/install.sh | sh \
     && export DENO_INSTALL="/root/.deno" \
     && export PATH="$DENO_INSTALL/bin:$PATH"
 
-RUN deno cache server/server.ts
+# Expose port
+EXPOSE 3000
 
-EXPOSE 3000 
+# compile the app
+RUN deno compile server/server.ts
 
-CMD ["deno", "run", "-A", "server/server.ts"]
+# Run the app
+CMD ["./server"]
