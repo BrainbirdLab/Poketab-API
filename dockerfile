@@ -1,8 +1,14 @@
+# Lightweight image for Deploying Deno app
 FROM alpine
 
+# Working directory
 WORKDIR /app
 
+# Copy all files to the container
 COPY . .
+
+# Install Deno
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh
 
 RUN deno cache server/server.ts
 
