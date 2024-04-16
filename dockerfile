@@ -1,6 +1,9 @@
 # Lightweight image for Deploying Deno app
 FROM alpine
 
+# Install curl
+RUN apk add --no-cache curl
+
 # Working directory
 WORKDIR /app
 
