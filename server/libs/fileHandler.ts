@@ -203,7 +203,7 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
       await redis.del(`chat:${key}:file:${messageId}`);
       await Deno.remove(`./uploads/${key}/${messageId}`);
   
-      //console.log('File deleted');
+      console.log(`File deleted: ${messageId}`);
       //if './uploads/key' is empty, delete the directory
       await cleanupFolder(key, true);
     }
