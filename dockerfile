@@ -12,4 +12,4 @@ USER deno
 # Ideally cache deps.ts will download and compile _all_ external files used in main.ts.
 COPY . .
 
-CMD ["run", "--allow-net", "server/server.ts"]
+CMD ["run", "-A", "server/server.ts"]
