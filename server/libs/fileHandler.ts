@@ -113,7 +113,15 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     //create directory by the key name if not exists
     const dirName = `./uploads/${key}`;
 
-    await Deno.mkdir(dirName, { recursive: true });
+    //await Deno.mkdir(dirName, { recursive: true });
+    //check is folder not exist
+
+    const dir = await Deno.stat(dirName).catch(() => null);
+
+    if (!dir || !dir.isDirectory) {
+      await Deno.mkdir(dirName, { recursive: true });
+      console.log('Upload Directory created');
+    }
     
     //write file to disk
     await Deno.writeFile(`${dirName}/${messageId}`, file.stream(), {append: true});
