@@ -213,8 +213,6 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
       await Deno.remove(`./uploads/${key}/${messageId}`);
   
       console.log(`File deleted: ${messageId}`);
-      //if './uploads/key' is empty, delete the directory
-      await cleanupFolder(key, true);
     }
   }
 });
