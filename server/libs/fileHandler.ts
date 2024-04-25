@@ -182,7 +182,16 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
 
     //console.log('Serving file...');
 
-    const file = await Deno.open(`./uploads/${key}/${messageId}`);
+    const path = `./uploads/${key}/${messageId}`;
+
+    //check if file exists
+    const dir = await Deno.stat(path).catch(() => null);
+
+    if (!dir) {
+      return ctx.json({message: 'File not found'});
+    }
+
+    const file = await Deno.open(path);
     const size = (await file.stat()).size;
 
     //serve file
@@ -194,7 +203,7 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
 
   } catch (_) {
     ctx.status(404);
-    return ctx.json({ message: 'Not found' });
+    return ctx.json({ message: 'Error downloading file'});
   } finally {
     //console.log('File served');
     const [ downloadCount, maxDownload ] = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload') as unknown as [number, number];
