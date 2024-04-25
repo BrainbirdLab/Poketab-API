@@ -114,8 +114,16 @@ export async function cleanupFolder(path: string, onlyEmpty = false) {
 			return;
 		}
 
-		if (onlyEmpty && dir.size > 0) {
-			await Deno.remove(`./uploads/${path}`, { recursive: true });
+		if (onlyEmpty && dir.size < 1){
+			return;
+		}
+
+		//remove
+		const err = await Deno.remove(`./uploads/${path}`, { recursive: true }).catch((e) => e);
+
+		if (err) {
+			console.log(err);
+		} else {
 			console.log(`Folder ${path} deleted`);
 		}
 
