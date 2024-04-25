@@ -36,8 +36,8 @@ export const isRealString = (str: string) => {
 	return typeof str === 'string' && str.trim().length > 0;
 };
 
-export function validatepokemon(pokemon: string) {
-	return avList.includes(pokemon);
+export function validatename(avatar: string) {
+	return avList.includes(avatar);
 }
 
 export function validateKey(key: string) {
@@ -45,8 +45,8 @@ export function validateKey(key: string) {
 	return keyformat.test(key);
 }
 
-export function validateAll(key: string, pokemon: string) {
-	return (validateKey(key) && validatepokemon(pokemon));
+export function validateAll(key: string, avatar: string) {
+	return (validateKey(key) && validatename(avatar));
 }
 
 export async function getLinkMetadata(message: string): Promise<linkRes> {
@@ -60,7 +60,7 @@ export async function getLinkMetadata(message: string): Promise<linkRes> {
 			const url = link[0];
 			const html = await fetch(url).then((res) => res.text());
 			const titleRegex = /<title[^>]*>([^<]+)<\/title>/g;
-			const descriptionRegex = /<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/g;
+			const descriptionRegex = /<meta[^>]*avatar="description"[^>]*content="([^"]*)"[^>]*>/g;
 			const imageRegex = /<meta[^>]*property="og:image"[^>]*content="([^"]*)"[^>]*>/g;
 
 			const title = titleRegex.exec(html)?.[1] || '';

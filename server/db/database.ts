@@ -23,7 +23,7 @@ await redis.scriptFlush();
 console.log('Redis connected');
 
 export type User = {
-	pokemon: string;
+	avatar: string;
 	uid: string;
 	joinedAt: number;
 };

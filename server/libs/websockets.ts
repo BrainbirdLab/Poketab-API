@@ -5,7 +5,7 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 //internal modules
 import { getRandomKey } from './keyGen.ts';
 import { Key, User, _R_getAllUsersData, _R_exitUserFromSocket } from '../db/database.ts';
-import { validatepokemon, validateKey, getLinkMetadata } from './utils.ts';
+import { validatename, validateKey, getLinkMetadata } from './utils.ts';
 import { redis } from "../db/database.ts";
 import { _R_deleteChatKey } from '../db/database.ts';
 import { _R_joinChat } from '../db/database.ts';
@@ -89,7 +89,7 @@ io.on('connection', (socket) => {
   });
 
 
-  socket.on('createChat', async (pokemon: string, maxUsers: number, callback: (data: object | null) => void) => {
+  socket.on('createChat', async (avatar: string, maxUsers: number, callback: (data: object | null) => void) => {
 
     try {
       //console.log('createChat requested');
@@ -101,8 +101,8 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (!validatepokemon(pokemon)) {
-        callback({ success: false, message: 'Invalid pokemon', icon: 'fa-solid fa-triangle-exclamation' });
+      if (!validatename(avatar)) {
+        callback({ success: false, message: 'Invalid avatar', icon: 'fa-solid fa-triangle-exclamation' });
         return;
       }
 
@@ -127,7 +127,7 @@ io.on('connection', (socket) => {
       }
 
       const user: User = {
-        pokemon,
+        avatar,
         uid,
         joinedAt: Date.now(),
       }
@@ -136,8 +136,8 @@ io.on('connection', (socket) => {
 
       callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
 
-      //get pokemon, and id of all users in the room
-      const me = { pokemon, uid };
+      //get avatar, and id of all users in the room
+      const me = { avatar, uid };
 
       //console.log('Chat Created');
       io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
@@ -160,7 +160,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('joinChat', async (key: string, pokemon: string, callback: (data: object | null) => void) => {
+  socket.on('joinChat', async (key: string, avatar: string, callback: (data: object | null) => void) => {
     try {
 
       console.log('joinChat requested');
@@ -177,8 +177,8 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (!validatepokemon(pokemon)) {
-        callback({ success: false, message: 'Invalid pokemon', icon: 'fa-solid fa-triangle-exclamation' });
+      if (!validatename(avatar)) {
+        callback({ success: false, message: 'Invalid avatar', icon: 'fa-solid fa-triangle-exclamation' });
         return;
       }
 
@@ -202,7 +202,7 @@ io.on('connection', (socket) => {
           const uid = crypto.randomUUID();
 
           const me: User = {
-            pokemon,
+            avatar,
             uid,
             joinedAt: Date.now(),
           };
@@ -230,7 +230,7 @@ io.on('connection', (socket) => {
           socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
 
           //broadcast
-          socket.in(`chat:${key}`).emit('server_message', { text: `${pokemon} joined the that🔥`, id: crypto.randomUUID() }, 'join');
+          socket.in(`chat:${key}`).emit('server_message', { text: `${avatar} joined the that🔥`, id: crypto.randomUUID() }, 'join');
 
           socket.on('disconnect', async () => {
             console.log(`Chat Socket ${socket.id} Disconnected`);
@@ -344,20 +344,22 @@ async function exitSocket(socket: Socket, key: string) {
       return;
     }
     //get uid from redis
-    let data = await redis.hmget(`socket:${socket.id}`, 'pokemon', 'uid');
+    let data = await redis.hmget(`socket:${socket.id}`, 'avatar', 'uid');
 
     if (!data) {
       //console.log('Socket Data Not Found');
       return;
     }
 
-    const [pokemon, uid] = data as [string, string];
+    //console.log('left data', data);
+
+    const [avatar, uid] = data as [string, string];
 
     await _R_exitUserFromSocket(key, uid, socket.id);
 
-    //console.log(`User ${pokemon} left ${key}`);
+    console.log(`User ${avatar} left ${key}`);
 
-    socket.in(`chat:${key}`).emit('server_message', { text: `${pokemon} left the chat😭`, id: crypto.randomUUID() }, 'leave');
+    socket.in(`chat:${key}`).emit('server_message', { text: `${avatar} left the chat😭`, id: crypto.randomUUID() }, 'leave');
 
     data = await redis.hmget(`chat:${key}`, 'activeUsers');
 

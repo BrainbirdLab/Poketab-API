@@ -4,7 +4,7 @@ import { redis } from "../db/database.ts";
 
 import { io } from "./websockets.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
-import { cleanupFolder } from "./utils.ts";
+
 import { _R_fileUploadAuth } from "../db/database.ts";
 
 const app = new Hono();
@@ -12,7 +12,7 @@ const app = new Hono();
 const MAX_SIZE = 50 * 1024 * 1024;
 
 type FileData = {
-  name: string,
+  avatar: string,
   size: number,
   type: string,
   uploadedBy: string,
@@ -87,7 +87,7 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     if (!files.length) {
       //console.log('No file found');
       ctx.status(400);
-      return ctx.json({ message: 'No file found. Check field name.' });
+      return ctx.json({ message: 'No file found. Check field avatar.' });
     }
 
     if (files.length > 1) {
@@ -110,7 +110,7 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
 
     const file = files[0];
 
-    //create directory by the key name if not exists
+    //create directory by the key avatar if not exists
     const dirName = `./uploads/${key}`;
 
     //await Deno.mkdir(dirName, { recursive: true });
