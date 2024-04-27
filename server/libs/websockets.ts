@@ -4,12 +4,8 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //internal modules
 import { getRandomKey } from './keyGen.ts';
-import { Key, User, _R_getAllUsersData, _R_exitUserFromSocket } from '../db/database.ts';
-import { validatename, validateKey, getLinkMetadata } from './utils.ts';
-import { redis } from "../db/database.ts";
-import { _R_deleteChatKey } from '../db/database.ts';
-import { _R_joinChat } from '../db/database.ts';
-import { cleanupFolder } from './utils.ts';
+import { redis, Key, User, _R_getAllUsersData, _R_exitUserFromSocket, _R_deleteChatKey, _R_joinChat } from '../db/database.ts';
+import { validatename, validateKey, getLinkMetadata, cleanupFolder } from './utils.ts';
 import type { messageType } from './types.ts';
 
 //get client url from .env file which will be set to CORS

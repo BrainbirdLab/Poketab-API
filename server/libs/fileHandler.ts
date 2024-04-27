@@ -1,11 +1,9 @@
 import { type RedisValue } from "https://deno.land/x/redis@v0.32.1/mod.ts";
 
-import { redis } from "../db/database.ts";
+import { redis, _R_fileUploadAuth } from "../db/database.ts";
 
 import { io } from "./websockets.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
-
-import { _R_fileUploadAuth } from "../db/database.ts";
 
 const app = new Hono();
 
