@@ -1,5 +1,5 @@
 //external modules
-import { Server, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
+import { Server, createRedisAdapter, createRedisClient, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //internal modules
@@ -9,7 +9,22 @@ import { validatename, validateKey, getLinkMetadata, cleanupFolder } from './uti
 import type { messageType } from './types.ts';
 
 //get client url from .env file which will be set to CORS
-const { clienturl } = Deno.env.toObject();
+const { clienturl, host, port, password } = Deno.env.toObject();
+
+const [pubClient, subClient] = await Promise.all([
+  createRedisClient({
+    hostname: host,
+    port: parseInt(port),
+    password,
+  }),
+  createRedisClient({
+    hostname: host,
+    port: parseInt(port),
+    password,
+  }),
+]);
+
+pubClient.hset('server', 'status', 'online');
 
 //initialize socket.io server
 export const io = new Server({
@@ -17,7 +32,8 @@ export const io = new Server({
     origin: clienturl,
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  adapter: createRedisAdapter(pubClient, subClient),
 });
 
 console.log('Socket.io server initialized');
