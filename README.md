@@ -7,6 +7,7 @@ This backend server is designed to facilitate communication for Poketab Messenge
 - **Socket.io**: Enables real-time messaging between users.
 - **HTTP API**: Handles file upload and download operations.
 - **Redis Database**: Manages user metadata, including userId, chatRoomId, and admin status.
+- **Redis Adapter**: Connects all backend instances together to have a seamless communication. Uses pub/sub system.
 
 ## Features
 - Real-time Messaging: Utilizes Socket.io for seamless real-time communication between users.
