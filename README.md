@@ -1,4 +1,4 @@
-# Backend Server for Poketab Messenger
+# Backend Server for Poketab Messenger (API)
 
 ## Overview
 This backend server is designed to facilitate communication for Poketab Messenger. It leverages various technologies for different functionalities:
