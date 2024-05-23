@@ -105,29 +105,3 @@ export async function getLinkMetadata(message: string): Promise<linkRes> {
 		};
 	}
 }
-
-export async function cleanupFolder(path: string, onlyEmpty = false) {
-	try {
-		const dir = await Deno.stat(`./uploads/${path}`);
-		//if onlyEmpty is false, ignore the dir.size check
-		if (!dir.isDirectory) {
-			return;
-		}
-
-		if (onlyEmpty && dir.size < 1){
-			return;
-		}
-
-		//remove
-		const err = await Deno.remove(`./uploads/${path}`, { recursive: true }).catch((e) => e);
-
-		if (err) {
-			console.log(err);
-		} else {
-			console.log(`Folder ${path} deleted`);
-		}
-
-	} catch (_) {
-		return;
-	}
-}

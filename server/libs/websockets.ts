@@ -5,7 +5,7 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 //internal modules
 import { getRandomKey } from './keyGen.ts';
 import { redis, Key, User, _R_getAllUsersData, _R_exitUserFromSocket, _R_deleteChatKey, _R_joinChat } from '../db/database.ts';
-import { validatename, validateKey, getLinkMetadata, cleanupFolder } from './utils.ts';
+import { validatename, validateKey, getLinkMetadata } from './utils.ts';
 import type { messageType } from './types.ts';
 
 //get client url from .env file which will be set to CORS
@@ -375,27 +375,30 @@ async function exitSocket(socket: Socket, key: string) {
 
     data = await redis.hmget(`chat:${key}`, 'activeUsers');
 
-    if (!data) {
-      //console.log('Empty key');
-      //chat is empty.
-      //Delete all files which may be present in the 'uploads' directory
-
-      cleanupFolder(key);
-
-      return;
-    }
-
     const [activeUsers] = data as unknown as [number];
 
-    if (activeUsers > 0) {
+    if (activeUsers < 1) {
+
+      //No one left, delete folder
+      const dir = await Deno.stat('./uploads/' + key);
+
+      if (!dir.isDirectory){
+        return;
+      }
+
+      await Deno.remove('./uploads/' + key, { recursive: true });
+      console.log(`Deleted folder ${key}`);
+
+      await _R_deleteChatKey(key, socket.id);
+      //console.log('Key deleted');
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
+
+      return;
+    } else {
       const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
       //console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
       io.in(`chat:${key}`).emit('updateUserList', users);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
-    } else {
-      await _R_deleteChatKey(key, socket.id);
-      //console.log('Key deleted');
-      io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
     }
   } catch (error) {
     console.error(error);
