@@ -41,8 +41,6 @@ console.log('Socket.io server initialized');
 //listen for connection
 io.on('connection', (socket) => {
 
-  //console.log('Socket Connected. ID: ', socket.id);
-
   socket.on('fetchKeyData', async (key: string, ssr: boolean, callback: (data: object | null) => void) => {
 
     try {
@@ -53,19 +51,14 @@ io.on('connection', (socket) => {
         return;
       }
 
-      //console.log('fetchKeyData for key: ', key);
-
       if (!validateKey(key)) {
         callback({ success: false, message: 'Invalid Key', statusCode: 400, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null });
         return;
       }
 
-      //console.log('Searching database...');
-
       const exists = await redis.exists(`chat:${key}`);
 
       if (!exists) {
-        //console.log('Key Does Not Exist');
         callback({ success: false, message: 'Key Does Not Exist', statusCode: 404, icon: 'fa-solid fa-ghost', users: {}, maxUsers: null });
         return;
       }
@@ -73,7 +66,6 @@ io.on('connection', (socket) => {
       const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers');
 
       if (!keyData) {
-        //console.log('Key Data Not Found');
         callback({ success: false, message: 'Key Data Not Found', statusCode: 404, icon: 'fa-solid fa-ghost', users: {}, maxUsers: null });
         return;
       }
@@ -104,7 +96,6 @@ io.on('connection', (socket) => {
   socket.on('createChat', async (avatar: string, maxUsers: number, callback: (data: object | null) => void) => {
 
     try {
-      //console.log('createChat requested');
 
       if (!redis.isConnected) {
         callback({ success: false, message: 'Database disconnected', statusCode: 502, icon: 'fa-solid fa-triangle-exclamation', users: {}, maxUsers: null })
@@ -128,7 +119,6 @@ io.on('connection', (socket) => {
 
       socket.join(`chat:${key}`);
       socket.leave(`waitingRoom:${key}`);
-      //console.log(socket.id, 'left waiting room for key: ', key);
 
       const chatKey: Key = {
         keyId: key,
@@ -151,9 +141,8 @@ io.on('connection', (socket) => {
       //get avatar, and id of all users in the room
       const me = { avatar, uid };
 
-      //console.log('Chat Created');
+
       io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
-      //console.log(`sent update user list to ${key}. users count: 1`);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', { [uid]: me });
 
       //only sender
@@ -196,12 +185,10 @@ io.on('connection', (socket) => {
 
       if (await redis.exists(`chat:${key}`)) {
 
-        //const reply = await redis.sendCommand('JSON.GET', [`chat:${key}`,  'activeUsers', 'maxUsers', 'users']);
         const keyData = await redis.hmget(`chat:${key}`, 'activeUsers', 'maxUsers', 'admin');
 
         if (keyData) {
 
-          //const { activeUsers, maxUsers, users } = JSON.parse(reply as string) as Key;
           const activeUsers = parseInt(keyData[0] as string);
           const maxUsers = parseInt(keyData[1] as string);
           const admin = keyData[2] as string;
@@ -221,7 +208,6 @@ io.on('connection', (socket) => {
 
           socket.join(`chat:${key}`);
           socket.leave(`waitingRoom:${key}`);
-          //console.log(socket.id, 'left waiting room for key: ', key);
 
           await _R_joinChat(false, { keyId: key }, me, socket.id);
 
@@ -231,11 +217,9 @@ io.on('connection', (socket) => {
 
           callback({ success: true, message: 'Chat Joined', key, userId: uid, admin: admin, maxUsers: maxUsers });
 
-          //console.log('Chat Joined');
 
           //log the connected users on that room
           io.in(`chat:${key}`).emit('updateUserList', { ...users, [uid]: me });
-          //console.log(`sent update user list to ${key}. users count: ${activeUsers + 1}`);
           io.in(`waitingRoom:${key}`).emit('updateUserListWR', { ...users, [uid]: me });
 
           //only sender
@@ -275,10 +259,8 @@ io.on('connection', (socket) => {
 
     callback(messageId);
 
-    //console.log(message.type);
     if (message.type === 'text') {
       getLinkMetadata(message.message).then((data) => {
-        //console.log(data);
         if (data.data) {
           //everyone in room
           io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
@@ -320,23 +302,19 @@ async function exitHandler(destroy: boolean, key: string, socket: Socket, uid: s
     if (destroy) {
 
       //delete the chat and empty the room only if the user is the admin
-
       if (await redis.hget(`chat:${key}`, 'admin') !== uid) {
         console.log('Not an admin');
         return;
       }
 
       await _R_deleteChatKey(key, socket.id);
-      //console.log('Key deleted');
       io.in(`chat:${key}`).emit('selfDestruct', 'Chat destroyed🥺');
-      //console.log(`sent self destruct to ${key}`);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
       //empty the chat room
       socket.rooms.delete(`chat:${key}`);
       socket.rooms.delete(`waitingRoom:${key}`);
     } else {
       await exitSocket(socket, key);
-      //console.log('Chat Left');
       socket.emit('selfDestruct', 'You left the chat🥺');
     }
   } catch (error) {
@@ -352,18 +330,14 @@ async function exitSocket(socket: Socket, key: string) {
 
     //if socket not exists in redis, return
     if (!await redis.exists(`socket:${socket.id}`)) {
-      //console.log('Socket no longer exists in database');
       return;
     }
     //get uid from redis
     let data = await redis.hmget(`socket:${socket.id}`, 'avatar', 'uid');
 
     if (!data) {
-      //console.log('Socket Data Not Found');
       return;
     }
-
-    //console.log('left data', data);
 
     const [avatar, uid] = data as [string, string];
 
@@ -390,13 +364,11 @@ async function exitSocket(socket: Socket, key: string) {
       console.log(`Deleted folder ${key}`);
 
       await _R_deleteChatKey(key, socket.id);
-      //console.log('Key deleted');
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
 
       return;
     } else {
       const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
-      //console.log(`sent update user list to ${key}. users count: ${activeUsers}`);
       io.in(`chat:${key}`).emit('updateUserList', users);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
     }

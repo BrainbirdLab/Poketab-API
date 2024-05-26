@@ -17,7 +17,6 @@ type FileData = {
   uploadedAt: string,
 
   downloaded: number,
-  //downloadedBy: string[]
 };
 
 //file upload
@@ -28,25 +27,17 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
 
     const { key, uid, messageId } = ctx.req.param();
 
-    //check if key and uid exists
-    //const exists = await redis.exists(`chat:${key}:user:${uid}`);
-    //const activeUsers = await redis.hget(`chat:${key}`, 'activeUsers') as unknown as number;
-
     const res = await _R_fileUploadAuth(key, uid);
-
-    //console.log(res);
 
     const [exists, activeUsers] = res as [number, number];
 
     if (!exists){
-      //console.log('Unauthorized');
       ctx.status(401);
       return ctx.json({ message: 'Unauthorized' });
     }
 
 
     if (Number(activeUsers) < 2){
-      //console.log('Not enough users');
       ctx.status(400);
       return ctx.json({ message: 'Not enough users' });
     }
@@ -55,19 +46,14 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     const contentLength = ctx.req.header('content-length');
 
     if (!contentLength) {
-      //console.log('No content length');
-
       ctx.status(400);
       return ctx.json({ message: 'No content length' });
     }
 
     if (+contentLength > MAX_SIZE) {
-      //console.log('File size too large - Content length');
       ctx.status(400);
       return ctx.json({ message: `File size should be within ${MAX_SIZE} bytes.` });
     }
-
-    //console.log("parsing form");
 
     const form = await ctx.req.formData();
 
@@ -77,19 +63,15 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
       return ctx.json({ message: 'No data found' });
     }
 
-    //console.log("parsing file");
-
     //file size
     const files = form.getAll('file') as File[];
 
     if (!files.length) {
-      //console.log('No file found');
       ctx.status(400);
       return ctx.json({ message: 'No file found. Check field avatar.' });
     }
 
     if (files.length > 1) {
-      //console.log('Multiple files found');
       ctx.status(400);
       return ctx.json({ message: 'Multiple files found. Only one file allowed.' });
     }
@@ -97,23 +79,18 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     console.log(files[0].name);
 
     if (files[0].size > MAX_SIZE) {
-      //console.log('File size too large - File size');
       ctx.status(400);
       return ctx.json({ message: `File size should be within ${MAX_SIZE} bytes.` });
     }
 
     const maxUser = await redis.hget(`chat:${key}`, 'maxUsers') as unknown as number;
 
-    //console.log('Writing file...');
-
     const file = files[0];
 
     //create directory by the key avatar if not exists
     const dirName = `./uploads/${key}`;
 
-    //await Deno.mkdir(dirName, { recursive: true });
     //check is folder not exist
-
     const dir = await Deno.stat(dirName).catch(() => null);
 
     if (!dir || !dir.isDirectory) {
@@ -124,8 +101,6 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     //write file to disk
     await Deno.writeFile(`${dirName}/${messageId}`, file.stream(), {append: true});
 
-    //console.log('File written');
-
     const fieldValues: [string, RedisValue][] = [
       ['originalName', file.name],
       ['type', file.type],
@@ -135,7 +110,6 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
 
     //add file data to redis
     await redis.hset(`chat:${key}:file:${messageId}`, ...fieldValues);
-    //tx.hset(`chat:${key}:file:${fileId}`, 'recievedCount', 0);
 
     //send a message to all users about the file
     io.in(`chat:${key}`).emit('fileDownload', messageId, uid);
@@ -156,11 +130,7 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
 
   try {
 
-    //console.log('Download request received');
-
     const res = await redis.exists(`chat:${key}`, `chat:${key}:user:${userId}`, `chat:${key}:file:${messageId}`);
-
-    //console.log(res);
 
     if (res !== 3){
       console.log('Unauthorized');
@@ -177,8 +147,6 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
       tx.hset(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 1);
       await tx.flush();
     }
-
-    //console.log('Serving file...');
 
     const path = `./uploads/${key}/${messageId}`;
 
@@ -203,7 +171,7 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
     ctx.status(404);
     return ctx.json({ message: 'Error downloading file'});
   } finally {
-    //console.log('File served');
+    
     const [ downloadCount, maxDownload ] = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload') as unknown as [number, number];
     if (downloadCount && Number(downloadCount + 1) >= maxDownload){
   
