@@ -379,15 +379,22 @@ async function exitSocket(socket: Socket, key: string) {
 
     if (activeUsers < 1) {
 
-      //No one left, delete folder
-      const dir = await Deno.stat('./uploads/' + key);
+      //if folder exists,
+      Deno.stat('./uploads/' + key)
+      .then((info) => {
 
-      if (!dir.isDirectory){
-        return;
-      }
+        if (info.isDirectory) {
+          Deno.remove('./uploads/' + key, { recursive: true }).then(() => {
+            console.log('Deleted folder', key);
+          }).catch((err) => {
+            console.log(`Unable to delete folder ${key}. Reason: ${err}`);
+          });
+        }
 
-      await Deno.remove('./uploads/' + key, { recursive: true });
-      console.log(`Deleted folder ${key}`);
+      })
+      .catch(() => {
+        console.log('No folder found to clean for key: ', key);
+      });
 
       await _R_deleteChatKey(key, socket.id);
       //console.log('Key deleted');
