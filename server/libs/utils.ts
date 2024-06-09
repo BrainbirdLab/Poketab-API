@@ -89,7 +89,6 @@ export async function getLinkMetadata(message: string): Promise<linkRes> {
 			};
 
 		} else {
-			//console.error('No valid links found in the message.');
 			return {
 				success: true,
 				error: null,
@@ -97,7 +96,6 @@ export async function getLinkMetadata(message: string): Promise<linkRes> {
 			};
 		}
 	} catch (_) {
-		//console.error(e);
 		return {
 			success: false,
 			error: 'Error fetching link metadata',

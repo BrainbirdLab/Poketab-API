@@ -48,7 +48,6 @@ app.get('/mbm/:adminPasskey/:message/:time', (ctx) => {
   const { message } = ctx.req.param();
   const { time } = ctx.req.param();
 
-  //console.log(`Got: ${adminPasskey}, ${message}, ${time}`);
 
   if (!adminPasskey || !message) {
     ctx.status(400);

@@ -5,17 +5,12 @@ const { host, password, port } = Deno.env.toObject();
 
 console.log('Connecting to Redis');
 
-//console.log(`host: ${host}, port: ${port}, password: ${password}`);
-
 export const redis = await connect({
 	hostname: host,
 	port: +port,
 	password: password,
 	maxRetryCount: 5,
 });
-
-//delete all keys
-//await redis.flushdb();
 
 //delete all scripts
 await redis.scriptFlush();
@@ -29,14 +24,11 @@ export type User = {
 };
 
 export type Key = {
-	//users: { [key: string]: User };
 	keyId: string;
 	activeUsers?: number;
 	maxUsers?: number;
 	admin?: string | null;
 	createdAt?: number;
-	// Shared files
-	//files: { [id: string]: SharedFile };
 };
 
 //load lua scripts
