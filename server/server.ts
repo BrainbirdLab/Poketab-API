@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
 import { handler } from "./libs/apiServer.ts";
 import { redis } from "./db/database.ts";
 
-const port = 3000;
+const port = 5000;
 
 redis.flushdb().then(() => {
     console.log('Redis flushed');
