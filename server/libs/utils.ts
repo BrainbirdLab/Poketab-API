@@ -30,8 +30,6 @@ export const avList = [
 	'Palkia'
 ];
 
-
-
 export const isRealString = (str: string) => {
 	return typeof str === 'string' && str.trim().length > 0;
 };
