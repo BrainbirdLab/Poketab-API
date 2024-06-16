@@ -38,16 +38,32 @@ const exitSocketScript = await Deno.readTextFile('server/db/lua/exitSocket.lua')
 const joinChatScript = await Deno.readTextFile('server/db/lua/joinChat.lua');
 const fileUploadAuthScript = await Deno.readTextFile('server/db/lua/fileUploadAuth.lua');
 
-console.log('Lua scripts loaded');
 
-const SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
-const SHA_DELETE_CHAT = await redis.scriptLoad(deleteChatScript);
-const SHA_EXIT_SOCKET = await redis.scriptLoad(exitSocketScript);
-const joinChatScriptSHA = await redis.scriptLoad(joinChatScript);
-const fileUploadAuthSHA = await redis.scriptLoad(fileUploadAuthScript);
+let SHA_GET_USERS: string;
+let SHA_DELETE_CHAT: string;
+let SHA_EXIT_SOCKET: string;
+let SHA_JOIN_CHAT: string;
+let SHA_FILE_UPLOAD: string;
+
+async function loadScripts(){
+	SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
+	SHA_DELETE_CHAT = await redis.scriptLoad(deleteChatScript);
+	SHA_EXIT_SOCKET = await redis.scriptLoad(exitSocketScript);
+	SHA_JOIN_CHAT = await redis.scriptLoad(joinChatScript);
+	SHA_FILE_UPLOAD = await redis.scriptLoad(fileUploadAuthScript);
+}
 
 export async function _R_getAllUsersData(key: string){
 	try{
+
+		//if sha is not available on redis, load it
+		const exists = await redis.scriptExists(SHA_GET_USERS);
+
+		if (!exists[0]){
+			SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
+			console.log('Script re-loaded: getAllUsersData.lua');
+		}
+
 		const result = await redis.evalsha(SHA_GET_USERS, [], [key]) as string;
 		return JSON.parse(result);
 	} catch (err){
@@ -58,6 +74,14 @@ export async function _R_getAllUsersData(key: string){
 
 export async function _R_deleteChatKey(key: string, socketid: string){
 	try{
+		//if sha is not available on redis, load it
+		const exists = await redis.scriptExists(SHA_DELETE_CHAT);
+
+		if (!exists[0]){
+			SHA_DELETE_CHAT = await redis.scriptLoad(deleteChatScript);
+			console.log('Script re-loaded: deleteKey.lua');
+		}
+
 		await redis.evalsha(SHA_DELETE_CHAT, [], [key, socketid]);
 	} catch (err){
 		console.error(err);
@@ -66,6 +90,15 @@ export async function _R_deleteChatKey(key: string, socketid: string){
 
 export async function _R_exitUserFromSocket(key: string, uid: string, socketid: string){
 	try{
+
+		//if sha is not available on redis, load it
+		const exists = await redis.scriptExists(SHA_EXIT_SOCKET);
+
+		if (!exists[0]){
+			SHA_EXIT_SOCKET = await redis.scriptLoad(exitSocketScript);
+			console.log('Script re-loaded: exitSocket.lua');
+		}
+
 		await redis.evalsha(SHA_EXIT_SOCKET, [], [key, uid, socketid]);
 	} catch (err){
 		console.error(err);
@@ -74,11 +107,20 @@ export async function _R_exitUserFromSocket(key: string, uid: string, socketid: 
 
 export async function _R_joinChat(create: boolean, key: Key, user: User, socketid: string){
 	try{
-		await redis.evalsha(joinChatScriptSHA, [], [create ? 'true' : 'false', JSON.stringify({
+		//if sha is not available on redis, load it
+		const exists = await redis.scriptExists(SHA_JOIN_CHAT);
+
+		if (!exists[0]){
+			SHA_JOIN_CHAT = await redis.scriptLoad(joinChatScript);
+			console.log('Script re-loaded: joinChat.lua');
+		}
+
+		await redis.evalsha(SHA_JOIN_CHAT, [], [create ? 'true' : 'false', JSON.stringify({
 			key: key,
 			user: user,
 			socket: socketid,
 		})]);
+
 	} catch (err){
 		console.error(err);
 	}
@@ -86,9 +128,20 @@ export async function _R_joinChat(create: boolean, key: Key, user: User, socketi
 
 export async function _R_fileUploadAuth(key: string, uid: string){
 	try{
-		const res = await redis.evalsha(fileUploadAuthSHA, [], [key, uid]);
+
+		//if sha is not available on redis, load it
+		const exists = await redis.scriptExists(SHA_FILE_UPLOAD);
+
+		if (!exists[0]){
+			SHA_FILE_UPLOAD = await redis.scriptLoad(fileUploadAuthScript);
+			console.log('Script re-loaded: fileUploadAuth.lua');
+		}
+
+		const res = await redis.evalsha(SHA_FILE_UPLOAD, [], [key, uid]);
 		return res;
 	} catch (err){
 		console.error(err);
 	}
 }
+
+await loadScripts();

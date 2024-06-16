@@ -22,6 +22,7 @@ app.use("*", async (ctx, next) => {
   ctx.header('X-Powered-By', 'Hono');
   //if origin is the client url, allow it
   if (ctx.req.header('origin') === clienturl) {
+    console.log('set cors');
     ctx.header('Access-Control-Allow-Origin', clienturl);
   }
   ctx.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
