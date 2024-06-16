@@ -29,7 +29,7 @@ pubClient.hset('server', 'status', 'online');
 //initialize socket.io server
 export const io = new Server({
   cors: {
-    origin: clienturl,
+    origin: [clienturl],
     methods: ["GET", "POST"],
     credentials: true
   },
