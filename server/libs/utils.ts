@@ -66,7 +66,7 @@ export async function getLinkMetadata(message: string): Promise<linkRes> {
 			let image = imageRegex.exec(html)?.[1] || '';
 
 			//if image path is relative, convert it to absolute
-			if (image && image.startsWith('/')) {
+			if (image?.startsWith('/')) {
 				const urlObject = new URL(url);
 				image = `${urlObject.protocol}//${urlObject.host}${image}`;
 			}

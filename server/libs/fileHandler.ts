@@ -93,7 +93,7 @@ app.post('/upload/:key/:uid/:messageId', async (ctx) => {
     //check is folder not exist
     const dir = await Deno.stat(dirName).catch(() => null);
 
-    if (!dir || !dir.isDirectory) {
+    if (!dir?.isDirectory) {
       await Deno.mkdir(dirName, { recursive: true });
       console.log('Upload Directory created');
     }
@@ -172,8 +172,11 @@ app.get('/download/:key/:userId/:messageId', async (ctx) => {
     return ctx.json({ message: 'Error downloading file'});
   } finally {
     
-    const [ downloadCount, maxDownload ] = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload') as unknown as [number, number];
-    if (downloadCount && Number(downloadCount + 1) >= maxDownload){
+    const downloadInfo = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload');
+
+    const [downloadCount, maxDownload] = downloadInfo as unknown as [number, number];
+
+    if (Number(downloadCount + 1) >= Number(maxDownload)){
   
       await redis.del(`chat:${key}:file:${messageId}`);
       await Deno.remove(`./uploads/${key}/${messageId}`);
