@@ -22,3 +22,6 @@ This backend server is designed to facilitate communication for Poketab Messenge
 ## Note
 This server does not store any message content. It solely focuses on managing user metadata and facilitating real-time communication.
 
+[Frontend repo](https://github.com/BrainbirdLab/Poketab-Frontend)
+
+Hosted url: https://chat.brainbird.org
