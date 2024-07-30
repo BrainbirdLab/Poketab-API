@@ -253,23 +253,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('sharePublicKey', (uid: string, pubKey: string, key: string) => {
-    //store the public key in redis
-    redis.hset(`publicKeys:${key}`, uid, pubKey);
-    //broadcast to everyone in the room
-    io.in(`chat:${key}`).emit('sharedPublicKey', uid, pubKey);
-  });
-
-  socket.on('getPublicKeys', async (key: string, callback: (data: { [key: string]: string }) => void) => {
-    const keys = await redis.hgetall(`publicKeys:${key}`);
-    const publicKeys: { [key: string]: string } = {};
-    for (let i = 0; i < keys.length; i += 2) {
-      publicKeys[keys[i]] = keys[i + 1];
-    }
-    callback(publicKeys);
-  });
-
-
   socket.on('newMessage', (message, key: string, smKeys: {[key: string]: ArrayBuffer}, callback: (data: string | null) => void) => {
 
     const messageId = crypto.randomUUID();
