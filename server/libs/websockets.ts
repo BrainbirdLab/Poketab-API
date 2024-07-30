@@ -143,9 +143,6 @@ io.on('connection', (socket) => {
       const dataForWaitingRoom = { [uid]: { avatar } };
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', dataForWaitingRoom);
 
-      //only sender
-      //socket.emit('server_message', { text: 'You joined the chat🔥', id: crypto.randomUUID() }, 'join');
-
       socket.on('disconnect', async () => {
         console.log(`Chat Socket ${socket.id} Disconnected`);
         await exitSocket(socket, key);
