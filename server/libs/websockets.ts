@@ -5,8 +5,7 @@ import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 //internal modules
 import { getRandomKey } from './keyGen.ts';
 import { redis, Key, User, _R_getAllUsersData, _R_exitUserFromSocket, _R_deleteChatKey, _R_joinChat } from '../db/database.ts';
-import { validatename, validateKey, getLinkMetadata } from './utils.ts';
-import type { messageType } from './types.ts';
+import { validatename, validateKey } from './utils.ts';
 
 //get client url from .env file which will be set to CORS
 const { clienturl, host, port, password } = Deno.env.toObject();
@@ -93,7 +92,7 @@ io.on('connection', (socket) => {
   });
 
 
-  socket.on('createChat', async (avatar: string, maxUsers: number, callback: (data: object | null) => void) => {
+  socket.on('createChat', async (avatar: string, maxUsers: number, publicKey: string, callback: (data: object | null) => void) => {
 
     try {
 
@@ -114,7 +113,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      const uid = crypto.randomUUID();
+      const uid = socket.id;
       const key = await getRandomKey();
 
       socket.join(`chat:${key}`);
@@ -131,29 +130,28 @@ io.on('connection', (socket) => {
       const user: User = {
         avatar,
         uid,
+        publicKey,
         joinedAt: Date.now(),
       }
 
-      await _R_joinChat(true, chatKey, user, socket.id);
+      await _R_joinChat(true, chatKey, user);
 
-      callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers });
+      callback({ success: true, message: 'Chat Created', key, userId: uid, maxUsers: maxUsers, user: user });
 
       //get avatar, and id of all users in the room
-      const me = { avatar, uid };
-
-
-      io.in(`chat:${key}`).emit('updateUserList', { [uid]: me });
-      io.in(`waitingRoom:${key}`).emit('updateUserListWR', { [uid]: me });
+      //omit the joinedAt and public key
+      const dataForWaitingRoom = { [uid]: { avatar } };
+      io.in(`waitingRoom:${key}`).emit('updateUserListWR', dataForWaitingRoom);
 
       //only sender
-      socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
+      //socket.emit('server_message', { text: 'You joined the chat🔥', id: crypto.randomUUID() }, 'join');
 
       socket.on('disconnect', async () => {
         console.log(`Chat Socket ${socket.id} Disconnected`);
         await exitSocket(socket, key);
       });
 
-      socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket, uid));
+      socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
 
     } catch (error) {
       console.error(error);
@@ -161,7 +159,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('joinChat', async (key: string, avatar: string, callback: (data: object | null) => void) => {
+  socket.on('joinChat', async (key: string, avatar: string, publicKey: string, callback: (data: object | null) => void) => {
     try {
 
       console.log('joinChat requested');
@@ -198,42 +196,46 @@ io.on('connection', (socket) => {
             return;
           }
 
-          const uid = crypto.randomUUID();
+          const uid = socket.id;
 
           const me: User = {
             avatar,
             uid,
+            publicKey,
             joinedAt: Date.now(),
           };
 
           socket.join(`chat:${key}`);
           socket.leave(`waitingRoom:${key}`);
 
-          await _R_joinChat(false, { keyId: key }, me, socket.id);
+          await _R_joinChat(false, { keyId: key }, me);
 
+          // 'avatar', 'key', 'publicKey' are stored in redis
           let users: { [key: string]: Omit<User, 'joined'> } = {}; //omit the joined property
 
           users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
 
-          callback({ success: true, message: 'Chat Joined', key, userId: uid, admin: admin, maxUsers: maxUsers });
+          console.log('Users in room: ', users);
 
+          callback({ success: true, message: 'Chat Joined', userId: uid, admin: admin, maxUsers: maxUsers, users });
 
-          //log the connected users on that room
-          io.in(`chat:${key}`).emit('updateUserList', { ...users, [uid]: me });
-          io.in(`waitingRoom:${key}`).emit('updateUserListWR', { ...users, [uid]: me });
+          //sent the users detail to the waiting room but exclude public key and joinedAt
+          const dataForWaitingRoom = Object.keys(users).reduce((acc, curr) => {
+            const { avatar } = users[curr];
+            acc[curr] = { avatar };
+            return acc;
+          }, {} as { [key: string]: { avatar: string } });
 
-          //only sender
-          socket.emit('server_message', { text: 'You joined the that🔥', id: crypto.randomUUID() }, 'join');
-
-          //broadcast
-          socket.in(`chat:${key}`).emit('server_message', { text: `${avatar} joined the that🔥`, id: crypto.randomUUID() }, 'join');
-
+          dataForWaitingRoom[uid] = { avatar };
+          
+          io.in(`waitingRoom:${key}`).emit('updateUserListWR', dataForWaitingRoom);
+          socket.in(`chat:${key}`).emit('newUser', { avatar, uid, publicKey });
           socket.on('disconnect', async () => {
             console.log(`Chat Socket ${socket.id} Disconnected`);
             await exitSocket(socket, key);
           });
 
-          socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket, uid));
+          socket.on('leaveChat', (destroy: boolean) => exitHandler(destroy, key, socket));
 
         } else {
           // Handle the case where the data doesn't exist or is null.
@@ -251,22 +253,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('newMessage', (message: messageType, key: string, callback: (data: string | null) => void) => {
+  socket.on('sharePublicKey', (uid: string, pubKey: string, key: string) => {
+    //store the public key in redis
+    redis.hset(`publicKeys:${key}`, uid, pubKey);
+    //broadcast to everyone in the room
+    io.in(`chat:${key}`).emit('sharedPublicKey', uid, pubKey);
+  });
+
+  socket.on('getPublicKeys', async (key: string, callback: (data: { [key: string]: string }) => void) => {
+    const keys = await redis.hgetall(`publicKeys:${key}`);
+    const publicKeys: { [key: string]: string } = {};
+    for (let i = 0; i < keys.length; i += 2) {
+      publicKeys[keys[i]] = keys[i + 1];
+    }
+    callback(publicKeys);
+  });
+
+
+  socket.on('newMessage', (message, key: string, smKeys: {[key: string]: ArrayBuffer}, callback: (data: string | null) => void) => {
 
     const messageId = crypto.randomUUID();
-    //broadcast
-    socket.in(`chat:${key}`).emit('newMessage', message, messageId);
+    //get all users in the room by the socket and room name (key)
+    io.in(`chat:${key}`).fetchSockets().then((sockets) => {
+      sockets.forEach((soc) => {
+        if (soc.id !== socket.id) {
+          const smKey = smKeys[soc.id];
+          soc.emit('newMessage', message, smKey, messageId);
+        }
+      });
+    });
 
     callback(messageId);
-
-    if (message.type === 'text') {
-      getLinkMetadata(message.message).then((data) => {
-        if (data.data) {
-          //everyone in room
-          io.in(`chat:${key}`).emit('linkPreviewData', messageId, data.data);
-        }
-      }).catch(() => { });
-    }
   });
 
   socket.on('deleteMessage', (messageId: string, key: string, userId: string) => {
@@ -296,13 +313,13 @@ io.on('connection', (socket) => {
   });
 });
 
-async function exitHandler(destroy: boolean, key: string, socket: Socket, uid: string) {
+async function exitHandler(destroy: boolean, key: string, socket: Socket) {
 
   try {
     if (destroy) {
 
       //delete the chat and empty the room only if the user is the admin
-      if (await redis.hget(`chat:${key}`, 'admin') !== uid) {
+      if (await redis.hget(`chat:${key}`, 'admin') !== socket.id) {
         console.log('Not an admin');
         return;
       }
@@ -329,23 +346,23 @@ async function exitSocket(socket: Socket, key: string) {
     socket.leave(`chat:${key}`);
 
     //if socket not exists in redis, return
-    if (!await redis.exists(`socket:${socket.id}`)) {
+    if (!await redis.exists(`uid:${socket.id}`)) {
       return;
     }
     //get uid from redis
-    let data = await redis.hmget(`socket:${socket.id}`, 'avatar', 'uid');
+    let data = await redis.hmget(`uid:${socket.id}`, 'avatar', 'uid');
 
     if (!data) {
       return;
     }
 
-    const [avatar, uid] = data as [string, string];
+    const [avatar] = data as [string, string];
 
-    await _R_exitUserFromSocket(key, uid, socket.id);
+    await _R_exitUserFromSocket(key, socket.id);
 
     console.log(`User ${avatar} left ${key}`);
 
-    socket.in(`chat:${key}`).emit('server_message', { text: `${avatar} left the chat😭`, id: crypto.randomUUID() }, 'leave');
+    socket.in(`chat:${key}`).emit('userLeft', socket.id);
 
     data = await redis.hmget(`chat:${key}`, 'activeUsers');
 
@@ -376,7 +393,6 @@ async function exitSocket(socket: Socket, key: string) {
       return;
     } else {
       const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
-      io.in(`chat:${key}`).emit('updateUserList', users);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
     }
   } catch (error) {
