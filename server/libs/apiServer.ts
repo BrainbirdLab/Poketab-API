@@ -6,7 +6,6 @@ import fileHandler from "./fileHandler.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
-
 const { clienturl } = Deno.env.toObject();
 
 const app = new Hono();
