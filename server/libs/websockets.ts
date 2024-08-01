@@ -370,6 +370,8 @@ async function exitSocket(socket: Socket, key: string) {
       await _R_deleteChatKey(key, socket.id);
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', {});
 
+      console.log('Chat deleted on', key);
+
       return;
     } else {
       const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
