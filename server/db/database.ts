@@ -50,11 +50,17 @@ let SHA_FILE_UPLOAD: string;
 
 async function loadScripts(){
 	SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
+	console.log('Script loaded: getAllUsersData.lua');
 	SHA_GET_ALL_USERS_AVATAR = await redis.scriptLoad(getAllUsersAvatarScript);
+	console.log('Script loaded: getAllUsersAvatar.lua');
 	SHA_DELETE_CHAT = await redis.scriptLoad(deleteChatScript);
+	console.log('Script loaded: deleteKey.lua');
 	SHA_EXIT_SOCKET = await redis.scriptLoad(exitSocketScript);
+	console.log('Script loaded: exitSocket.lua');
 	SHA_JOIN_CHAT = await redis.scriptLoad(joinChatScript);
+	console.log('Script loaded: joinChat.lua');
 	SHA_FILE_UPLOAD = await redis.scriptLoad(fileUploadAuthScript);
+	console.log('Script loaded: fileUploadAuth.lua');
 }
 
 export async function _R_getAllUsersAvatar(key: string){

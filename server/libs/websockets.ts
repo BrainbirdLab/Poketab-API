@@ -212,8 +212,6 @@ io.on('connection', (socket) => {
 
           users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
 
-          console.log('Users in room: ', users);
-
           callback({ success: true, message: 'Chat Joined', userId: uid, admin: admin, maxUsers: maxUsers, users });
 
           //sent the users detail to the waiting room but exclude public key and joinedAt
@@ -255,12 +253,16 @@ io.on('connection', (socket) => {
     const messageId = crypto.randomUUID();
     //get all users in the room by the socket and room name (key)
     io.in(`chat:${key}`).fetchSockets().then((sockets) => {
-      sockets.forEach((soc) => {
-        if (soc.id !== socket.id) {
-          const smKey = smKeys[soc.id];
-          soc.emit('newMessage', message, smKey, messageId);
-        }
-      });
+      try {
+        sockets.forEach((soc) => {
+          if (soc.id !== socket.id) {
+            const smKey = smKeys[soc.id];
+            soc.emit('newMessage', message, smKey, messageId);
+          }
+        });
+      } catch (_) {
+        console.error('Error broadcasting message');
+      }
     });
 
     callback(messageId);
@@ -375,6 +377,9 @@ async function exitSocket(socket: Socket, key: string) {
       return;
     } else {
       const users = await _R_getAllUsersData(key) as { [key: string]: Omit<User, 'joined'> };
+      if (!users) {
+        return;
+      }
       io.in(`waitingRoom:${key}`).emit('updateUserListWR', users);
     }
   } catch (error) {
