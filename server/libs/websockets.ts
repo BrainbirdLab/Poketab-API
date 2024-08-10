@@ -342,7 +342,7 @@ async function exitSocket(socket: Socket, key: string) {
 
     await _R_exitUserFromSocket(key, socket.id);
 
-    console.log(`User ${avatar} left ${key}`);
+    console.log(`${avatar} left ${key}`);
 
     socket.in(`chat:${key}`).emit('userLeft', socket.id);
 

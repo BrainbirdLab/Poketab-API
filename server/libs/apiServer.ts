@@ -6,7 +6,7 @@ import fileHandler from "./fileHandler.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
-const { clienturl } = Deno.env.toObject();
+const { clienturl, devMode } = Deno.env.toObject();
 
 const app = new Hono();
 
@@ -19,8 +19,10 @@ app.use("*", async (ctx, next) => {
   const ms = Date.now() - start;
   ctx.header('X-Server', 'Deno');
   ctx.header('X-Powered-By', 'Hono');
-  //if origin is the client url, allow it
-  if (ctx.req.header('origin') === clienturl) {
+  if (devMode) {
+    console.log('Dev mode enabled');
+    ctx.header('Access-Control-Allow-Origin', '*');
+  } else {
     ctx.header('Access-Control-Allow-Origin', clienturl);
   }
   ctx.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
