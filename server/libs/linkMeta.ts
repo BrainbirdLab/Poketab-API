@@ -2,9 +2,13 @@ import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 
 const app = new Hono();
 
-app.get('/', async (ctx) => {
+app.post('/', async (ctx) => {
     //get url from query
-    const link = ctx.req.query('url');
+    const form = await ctx.req.formData();
+
+    console.log(form);
+
+    const link = form.get('link')?.toString();
 
     if (!link) {
         ctx.status(400);
@@ -30,15 +34,7 @@ export type linkRes = {
 }
 
 function fetcher(url: string) {
-    const response = fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        },
-    });
+    const response = fetch(url);
     return response;
 }
 
