@@ -6,8 +6,6 @@ app.post('/', async (ctx) => {
     //get url from query
     const form = await ctx.req.formData();
 
-    console.log(form);
-
     const link = form.get('link')?.toString();
 
     if (!link) {
@@ -33,11 +31,6 @@ export type linkRes = {
 	error: string | null
 }
 
-function fetcher(url: string) {
-    const response = fetch(url);
-    return response;
-}
-
 function decodeURIComponentSafe(uri: string) {
     try {
         // if has &amp; replace it with &
@@ -50,11 +43,10 @@ function decodeURIComponentSafe(uri: string) {
 export async function parseMetadata(url: string): Promise<linkRes> {
     try {
 
-        const response = await fetcher(url);
-
+        const response = await fetch(url);
 
         if (!response.ok) {
-            throw new Error('Failed to fetch url');
+            throw new Error('Failed to fetch link metadata: ' + response.statusText);
         }
 
         const html = await response.text();
