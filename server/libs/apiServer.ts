@@ -3,6 +3,7 @@ import { io } from "./websockets.ts";
 import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
 
 import fileHandler from "./fileHandler.ts";
+import linkMeta from "./linkMeta.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
@@ -34,7 +35,8 @@ app.options('*', (ctx) => {
   return ctx.text('OK');
 });
 
-app.route('/api', fileHandler);
+app.route('/api/files', fileHandler);
+app.route('/api/linkmeta', linkMeta);
 
 app.get('/', (ctx) => {
   //random emoji from unicode range
