@@ -1,4 +1,5 @@
-# add the env
+# 1. rename this file to .env
+# 2. add the env
 port=""
 password=""
 host=""
