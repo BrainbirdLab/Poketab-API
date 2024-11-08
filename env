@@ -1,0 +1,6 @@
+# add the env
+port=""
+password=""
+host=""
+clienturl=http://localhost:5173
+adminPasskey=admin1234
