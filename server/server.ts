@@ -3,7 +3,7 @@
 console.log("Booting up...");
 
 import { redis } from "./db/database.ts";
-import { io } from "./libs/websockets.ts";
+import { handler } from "./libs/apiServer.ts";
 
 const port = 5000;
 
@@ -29,6 +29,6 @@ Deno.stat('./uploads')
 //serve(handler, { port: port });
 
 Deno.serve({
-    handler: io.handler(),
+    handler,
     port: port,
 });
