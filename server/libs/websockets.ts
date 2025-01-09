@@ -1,5 +1,5 @@
 //external modules
-import { Server, createRedisAdapter, createRedisClient, type Socket } from "https://deno.land/x/socket_io@0.2.0/mod.ts";
+import { Server, createRedisAdapter, createRedisClient, type Socket } from "https://deno.land/x/socket_io@0.2.1/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
 //internal modules

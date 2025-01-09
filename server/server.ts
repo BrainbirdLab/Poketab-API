@@ -2,9 +2,8 @@
 
 console.log("Booting up...");
 
-import { serve } from "https://deno.land/std@0.166.0/http/server.ts";
-import { handler } from "./libs/apiServer.ts";
 import { redis } from "./db/database.ts";
+import { io } from "./libs/websockets.ts";
 
 const port = 5000;
 
@@ -27,4 +26,9 @@ Deno.stat('./uploads')
 });
 
 //listen on port and bind handler
-serve(handler, { port: port });
+//serve(handler, { port: port });
+
+Deno.serve({
+    handler: io.handler(),
+    port: port,
+});
