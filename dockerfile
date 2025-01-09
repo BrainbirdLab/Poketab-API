@@ -1,4 +1,4 @@
-FROM denoland/deno:1.42.4
+FROM denoland/deno:2.1.4
 
 # Set the working directory inside the container
 WORKDIR /app
