@@ -1,80 +1,76 @@
 import { io } from "./websockets.ts";
 
-import { Hono } from "https://deno.land/x/hono@v3.12.4/mod.ts";
-
 import fileHandler from "./fileHandler.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
+import { XebecServer } from "https://deno.land/x/xebec@v0.0.4/mod.ts";
+
 const { clienturl, devMode } = Deno.env.toObject();
 
-const app = new Hono();
+const app = new XebecServer();
 
 console.log('Hono server instance created');
 
 //set custom headers for all responses
-app.use("*", async (ctx, next) => {
+app.use(async (_, next) => {
   const start = Date.now();
-  await next();
+  const res = await next();
   const ms = Date.now() - start;
-  ctx.header('X-Server', 'Deno');
-  ctx.header('X-Powered-By', 'Hono');
+  res.headers.set('X-Server', 'Deno');
+  res.headers.set('X-Powered-By', 'Hono');
   if (devMode) {
     console.log('Dev mode enabled');
-    ctx.header('Access-Control-Allow-Origin', '*');
+    res.headers.set('Access-Control-Allow-Origin', '*');
   } else {
-    ctx.header('Access-Control-Allow-Origin', clienturl);
+    res.headers.set('Access-Control-Allow-Origin', clienturl);
   }
-  ctx.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  ctx.header('X-Response-Time', `${ms}ms`);
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.headers.set('X-Response-Time', `${ms}ms`);
+
+  return res;
 });
 
-app.options('*', (ctx) => {
-  ctx.status(200);
-  return ctx.text('OK');
+app.OPTIONS('*', (_) => {
+  return new Response(null, { status: 200 });
 });
 
 app.route('/api/files', fileHandler);
 
-app.get('/', (ctx) => {
+app.GET('/', (_) => {
   //random emoji from unicode range
   const emoji = String.fromCodePoint(0x1F600 + Math.floor(Math.random() * 20));
-  return ctx.text(`Hello from Poketab - ${emoji}`);
+  return new Response(`Server is up and running ${emoji}`);
 });
 
 //maintainace break message from admin
-app.get('/mbm/:adminPasskey/:message/:time', (ctx) => {
+app.GET('/mbm/:adminPasskey/:message/:time', (req) => {
   //read env variable
-  const { adminPasskey } = ctx.req.param();
-  const { message } = ctx.req.param();
-  const { time } = ctx.req.param();
 
+  const { adminPasskey, message, time } = req.params;
 
   if (!adminPasskey || !message) {
-    ctx.status(400);
-    return ctx.json({ message: 'Invalid request' });
+    return new Response('Invalid request', { status: 400 });
   }
 
   //check if passkey is correct
   const key = Deno.env.get('adminPasskey');
 
   if (adminPasskey !== key) {
-    ctx.status(401);
-    return ctx.json({ message: 'Unauthorized' });
+    return new Response('Unauthorized', { status: 401 });
   }
 
   //send message to all connected clients
   io.emit('maintainanceBreak', message, parseInt(time));
 
-  ctx.status(200);
-  return ctx.json({ message: 'Message sent' });
+  return new Response('Message sent', { status: 200 });
 
 });
 
 
 export const handler = io.handler(async (req: Request) => {
   //upgrade to websocket
-  return await app.fetch(req) || new Response(null, { status: 404 });
+  return await app.handler(req) || new Response(null, { status: 404 });
 });
 
 console.log('Socket-io binded to Hono server');
