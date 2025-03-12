@@ -4,7 +4,7 @@ import fileHandler from "./fileHandler.ts";
 
 import "https://deno.land/x/dotenv@v3.2.2/mod.ts";
 
-import { XebecServer } from "https://deno.land/x/xebec@v0.0.4/mod.ts";
+import { XebecServer } from "https://deno.land/x/xebec@0.0.5/mod.ts";
 
 const { clienturl, devMode } = Deno.env.toObject();
 

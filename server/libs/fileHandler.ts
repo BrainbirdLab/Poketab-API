@@ -3,7 +3,7 @@ import { type RedisValue } from "https://deno.land/x/redis@v0.32.1/mod.ts";
 import { redis, _R_fileUploadAuth } from "../db/database.ts";
 
 import { io } from "./websockets.ts";
-import { XebecServer } from "https://deno.land/x/xebec@v0.0.4/mod.ts";
+import { XebecServer } from "https://deno.land/x/xebec@0.0.5/mod.ts";
 
 const app = new XebecServer();
 
