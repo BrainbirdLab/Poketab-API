@@ -10,7 +10,7 @@ const { clienturl, devMode } = Deno.env.toObject();
 
 const app = new XebecServer();
 
-console.log('Hono server instance created');
+console.log('Xebec server instance created');
 
 //set custom headers for all responses
 app.use(async (_, next) => {
@@ -18,7 +18,7 @@ app.use(async (_, next) => {
   const res = await next();
   const ms = Date.now() - start;
   res.headers.set('X-Server', 'Deno');
-  res.headers.set('X-Powered-By', 'Hono');
+  res.headers.set('X-Powered-By', 'Xebec');
   if (devMode) {
     console.log('Dev mode enabled');
     res.headers.set('Access-Control-Allow-Origin', '*');
@@ -73,4 +73,4 @@ export const handler = io.handler(async (req: Request) => {
   return await app.handler(req) || new Response(null, { status: 404 });
 });
 
-console.log('Socket-io binded to Hono server');
+console.log('Socket-io binded to Xebec server');
