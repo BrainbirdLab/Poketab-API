@@ -1,7 +1,0 @@
-# 1. rename this file to .env
-# 2. add the env
-port=""
-password=""
-host=""
-clienturl=http://localhost:5173
-adminPasskey=admin1234

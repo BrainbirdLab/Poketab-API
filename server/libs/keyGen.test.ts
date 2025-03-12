@@ -1,4 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.150.0/testing/asserts.ts";
+import "../test_setup.ts";
 import { makeKey } from "./keyGen.ts";
 
 //Deno test
@@ -6,11 +7,9 @@ import { makeKey } from "./keyGen.ts";
 Deno.test({
     name: "Unique key generation test",
     fn() {
-
         const generatedKeys: string[] = [];
 
         function getRandomKey() {
-
             const key = makeKey();
             //check if key exists
             if (generatedKeys.includes(key)) {
