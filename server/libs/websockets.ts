@@ -263,19 +263,38 @@ try {
               soc.emit('newMessage', message, smKey, messageId);
             }
           });
-        } catch (_) {
-          console.error('Error broadcasting message');
+        } catch (error) {
+          console.error('Error broadcasting message', error);
         }
       });
   
       callback(messageId);
     });
-  
+
+    //socket.emit('editMessage', encryptedMessage, chatRoomStore.value.Key, smKeys
+    socket.on('editMessage', (message: string, key: string, smKeys: {[key: string]: ArrayBuffer}, callback: () => void) => {
+      //everyone in room including sender
+      io.in(`chat:${key}`).fetchSockets().then((sockets) => {
+        try {
+          sockets.forEach((soc) => {
+            if (soc.id !== socket.id) {
+              const smKey = smKeys[soc.id];
+              soc.emit('editMessage', message, smKey);
+            }
+          });
+        } catch (error) {
+          console.error('Error broadcasting edited message', error);
+        }
+      });
+      callback();
+    });
+
+
     socket.on('deleteMessage', (messageId: string, key: string, userId: string) => {
       //send back to all users in the room including the sender
       io.in(`chat:${key}`).emit('deleteMessage', messageId, userId);
     });
-  
+
     socket.on('react', (messageId: string, key: string, userId: string, react: string) => {
       //everyone in room including sender
       io.in(`chat:${key}`).emit('react', messageId, userId, react);
