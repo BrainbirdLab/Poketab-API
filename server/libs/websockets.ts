@@ -8,7 +8,9 @@ import { redis, Key, User, _R_getAllUsersData, _R_exitUserFromSocket, _R_deleteC
 import { validatename, validateKey } from './utils.ts';
 
 //get client url from .env file which will be set to CORS
-const { clienturl, host, port, password } = Deno.env.toObject();
+const { clienturl, host, port, password, devMode } = Deno.env.toObject();
+
+const allowAllOrigins = devMode === 'true';
 
 const [pubClient, subClient] = await Promise.all([
   createRedisClient({
@@ -28,9 +30,9 @@ pubClient.hset('server', 'status', 'online');
 //initialize socket.io server
 export const io = new Server({
   cors: {
-    origin: [clienturl],
+    origin: allowAllOrigins ? '*' : [clienturl],
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: !allowAllOrigins,
   },
   adapter: createRedisAdapter(pubClient, subClient),
 });
