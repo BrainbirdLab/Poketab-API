@@ -175,3 +175,65 @@ Deno.test({
         }
     }
 }); 
+Deno.test({
+    name: "Rejected download does not delete the file; owner token downloads it",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    async fn() {
+        const { default: fileApp } = await import("./fileHandler.ts");
+        try {
+            await setupTestEnv();
+            await redis.sadd(`chat:${TEST_KEY}:users`, TEST_UID);
+            await redis.hset(`uid:${TEST_UID}`, "resumeToken", "tok");
+            await Deno.mkdir(`./uploads/${TEST_KEY}`, { recursive: true });
+            await Deno.writeFile(`./uploads/${TEST_KEY}/${TEST_MESSAGE_ID}`, new TextEncoder().encode("x"));
+            await redis.hset(`chat:${TEST_KEY}:file:${TEST_MESSAGE_ID}`, { maxDownload: 1, downloadCount: 0 });
+            const url = `http://test/download/${TEST_KEY}/${TEST_UID}/${TEST_MESSAGE_ID}`;
+
+            const rejected = await fileApp.handler(new Request(url));
+            assertEquals(rejected?.status, 401, "No token is rejected");
+            assertEquals(await redis.exists(`chat:${TEST_KEY}:file:${TEST_MESSAGE_ID}`), 1, "Rejected request must not delete the file");
+
+            const ok = await fileApp.handler(new Request(`${url}?token=tok`));
+            assertEquals(ok?.status, 200, "Owner token downloads");
+            await ok?.body?.cancel();
+        } finally {
+            await redis.del(`chat:${TEST_KEY}:users`);
+            await cleanupTestEnv();
+        }
+    }
+});
+
+Deno.test({
+    name: "Each user counts once; file is deleted after maxDownload distinct users",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    async fn() {
+        const { default: fileApp } = await import("./fileHandler.ts");
+        const users = ["u-one", "u-two"];
+        try {
+            await setupTestEnv();
+            for (const uid of users) {
+                await redis.sadd(`chat:${TEST_KEY}:users`, uid);
+                await redis.hset(`uid:${uid}`, "resumeToken", `tok-${uid}`);
+            }
+            await Deno.mkdir(`./uploads/${TEST_KEY}`, { recursive: true });
+            await Deno.writeFile(`./uploads/${TEST_KEY}/${TEST_MESSAGE_ID}`, new TextEncoder().encode("x"));
+            await redis.hset(`chat:${TEST_KEY}:file:${TEST_MESSAGE_ID}`, { maxDownload: 2, downloadCount: 0 });
+            const download = async (uid: string) => {
+                const res = await fileApp.handler(new Request(`http://test/download/${TEST_KEY}/${uid}/${TEST_MESSAGE_ID}?token=tok-${uid}`));
+                await res?.body?.cancel();
+                return res?.status;
+            };
+
+            assertEquals(await download("u-one"), 200);
+            assertEquals(await download("u-one"), 200, "Same user may download again");
+            assertEquals(await redis.exists(`chat:${TEST_KEY}:file:${TEST_MESSAGE_ID}`), 1, "Repeat download by one user does not use up the file");
+            assertEquals(await download("u-two"), 200);
+            assertEquals(await redis.exists(`chat:${TEST_KEY}:file:${TEST_MESSAGE_ID}`), 0, "Deleted after 2 distinct users");
+        } finally {
+            await redis.del(`chat:${TEST_KEY}:users`, ...users.map((u) => `uid:${u}`));
+            await cleanupTestEnv();
+        }
+    }
+});

@@ -1,8 +1,8 @@
 import { type RedisValue } from "https://deno.land/x/redis@v0.32.1/mod.ts";
 
-import { redis, _R_fileUploadAuth } from "../db/database.ts";
+import { redis, _R_fileAuth } from "../db/database.ts";
 
-import { io } from "./websockets.ts";
+import { io, type SocketData } from "./websockets.ts";
 import { XebecServer } from "https://deno.land/x/xebec@0.0.5/mod.ts";
 
 const app = new XebecServer();
@@ -17,11 +17,11 @@ app.POST('/upload/:key/:uid/:messageId', async (req) => {
 
     const { key, uid, messageId } = req.params;
 
-    const res = await _R_fileUploadAuth(key, uid);
+    const res = await _R_fileAuth(key, uid, new URL(req.url).searchParams.get('token') ?? '');
 
-    const [exists, activeUsers] = res as [number, number];
+    const [authorized, activeUsers] = res as [number, number];
 
-    if (!exists){
+    if (!authorized){
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -90,9 +90,9 @@ app.POST('/upload/:key/:uid/:messageId', async (req) => {
     await redis.hset(`chat:${key}:file:${messageId}`, ...fieldValues);
 
     //send a message to all users about the file, except the sender
-    io.in(`chat:${key}`).fetchSockets().then((sockets) => {
+    io.in(`chat:${key}`).fetchSockets<SocketData>().then((sockets) => {
       sockets.forEach((soc) => {
-        if (soc.id != uid) {
+        if (soc.data.uid != uid) {
           soc.emit('fileDownload', messageId, uid);
         }
       });
@@ -110,24 +110,21 @@ app.POST('/upload/:key/:uid/:messageId', async (req) => {
 app.GET('/download/:key/:userId/:messageId', async (req) => {
 
   const { key, userId, messageId } = req.params;
+  //only a served download may count toward deleting the file (rejected requests must not delete it)
+  let served = false;
 
   try {
 
-    const res = await redis.exists(`chat:${key}`, `uid:${userId}`, `chat:${key}:file:${messageId}`);
+    const [authorized] = await _R_fileAuth(key, userId, new URL(req.url).searchParams.get('token') ?? '') as [number, number];
 
-    if (res !== 3){
+    if (!authorized || !await redis.exists(`chat:${key}:file:${messageId}`)){
       console.log('Unauthorized');
       return new Response('Unauthorized', { status: 401 });
     }
 
-    //check if this user has not downloaded this file before
-    const [userHasDownloaded] = await redis.hmget(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`) as unknown as [string];
-    
-    if (userHasDownloaded === '1'){
-      const tx = redis.tx();
-      tx.hincrby(`chat:${key}:file:${messageId}`, 'downloadCount', 1);
-      tx.hset(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 1);
-      await tx.flush();
+    //count each user once (hsetnx is atomic: only a first download sets the flag)
+    if (await redis.hsetnx(`chat:${key}:file:${messageId}`, `downloaded:uid:${userId}`, 1)){
+      await redis.hincrby(`chat:${key}:file:${messageId}`, 'downloadCount', 1);
     }
 
     const path = `./uploads/${key}/${messageId}`;
@@ -149,6 +146,7 @@ app.GET('/download/:key/:userId/:messageId', async (req) => {
     //   'Content-Type': 'application/octet-stream'
     // });
 
+    served = true;
     return new Response(file.readable, {
       status: 200,
       headers: new Headers({
@@ -161,19 +159,21 @@ app.GET('/download/:key/:userId/:messageId', async (req) => {
   } catch (_) {
     return new Response('Error downloading file', { status: 404 });
   } finally {
-    
-    const downloadInfo = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload');
+    if (served) {
+      const downloadInfo = await redis.hmget(`chat:${key}:file:${messageId}`, 'downloadCount', 'maxDownload');
 
-    const [downloadCount, maxDownload] = downloadInfo as unknown as [number, number];
+      const [downloadCount, maxDownload] = downloadInfo as unknown as [number, number];
 
-    if (Number(downloadCount + 1) >= Number(maxDownload)){
+      //downloadCount already includes this download
+      if (Number(downloadCount) >= Number(maxDownload)){
 
-      try {
-        await redis.del(`chat:${key}:file:${messageId}`);
-        await Deno.remove(`./uploads/${key}/${messageId}`);
-        console.log(`File deleted: ${messageId}`);
-      } catch (_) {
-        console.log('Error deleting file');
+        try {
+          await redis.del(`chat:${key}:file:${messageId}`);
+          await Deno.remove(`./uploads/${key}/${messageId}`);
+          console.log(`File deleted: ${messageId}`);
+        } catch (_) {
+          console.log('Error deleting file');
+        }
       }
     }
   }

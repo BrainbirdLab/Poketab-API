@@ -2,15 +2,15 @@
 
 console.log("Booting up...");
 
-import { redis } from "./db/database.ts";
 import { handler } from "./libs/apiServer.ts";
+import { expireAbsentMembers } from "./libs/websockets.ts";
 
 const port = 5000;
 
-redis.flushdb().then(() => {
-    console.log('Redis flushed');
-}).catch(() => {
-    console.log("Error flushing redis")
+expireAbsentMembers().then(() => {
+    console.log('Absent members scheduled for expiry');
+}).catch((err) => {
+    console.log("Error scheduling member expiry", err)
 });
 
 Deno.stat('./uploads')

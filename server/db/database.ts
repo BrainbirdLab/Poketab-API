@@ -1,16 +1,14 @@
 import { connect } from "https://deno.land/x/redis@v0.32.1/mod.ts";
 import "https://deno.land/x/dotenv@v3.2.2/load.ts";
 
-const { host, password, port } = Deno.env.toObject();
+const { host, password, port, tls } = Deno.env.toObject();
+
+//shared with the socket.io adapter clients; tls=true for rediss:// hosts
+export const redisOptions = { hostname: host, port: +port, password, tls: tls === 'true' };
 
 console.log('Connecting to Redis');
 
-export const redis = await connect({
-	hostname: host,
-	port: +port,
-	password: password,
-	maxRetryCount: 5,
-});
+export const redis = await connect({ ...redisOptions, maxRetryCount: 5 });
 
 //delete all scripts
 await redis.scriptFlush();
@@ -38,7 +36,7 @@ const getAllUsersAvatarScript = await Deno.readTextFile('server/db/lua/getAllUse
 const deleteChatScript = await Deno.readTextFile('server/db/lua/deleteKey.lua');
 const exitSocketScript = await Deno.readTextFile('server/db/lua/exitSocket.lua');
 const joinChatScript = await Deno.readTextFile('server/db/lua/joinChat.lua');
-const fileUploadAuthScript = await Deno.readTextFile('server/db/lua/fileUploadAuth.lua');
+const fileAuthScript = await Deno.readTextFile('server/db/lua/fileAuth.lua');
 
 
 let SHA_GET_USERS: string;
@@ -46,7 +44,7 @@ let SHA_GET_ALL_USERS_AVATAR: string;
 let SHA_DELETE_CHAT: string;
 let SHA_EXIT_SOCKET: string;
 let SHA_JOIN_CHAT: string;
-let SHA_FILE_UPLOAD: string;
+let SHA_FILE_AUTH: string;
 
 async function loadScripts(){
 	SHA_GET_USERS = await redis.scriptLoad(getAllUsersDataScript);
@@ -59,8 +57,8 @@ async function loadScripts(){
 	console.log('Script loaded: exitSocket.lua');
 	SHA_JOIN_CHAT = await redis.scriptLoad(joinChatScript);
 	console.log('Script loaded: joinChat.lua');
-	SHA_FILE_UPLOAD = await redis.scriptLoad(fileUploadAuthScript);
-	console.log('Script loaded: fileUploadAuth.lua');
+	SHA_FILE_AUTH = await redis.scriptLoad(fileAuthScript);
+	console.log('Script loaded: fileAuth.lua');
 }
 
 export async function _R_getAllUsersAvatar(key: string){
@@ -128,7 +126,7 @@ export async function _R_exitUserFromSocket(key: string, uid: string){
 			console.log('Script re-loaded: exitSocket.lua');
 		}
 
-		await redis.evalsha(SHA_EXIT_SOCKET, [], [key, uid]);
+		return await redis.evalsha(SHA_EXIT_SOCKET, [], [key, uid]) as [number, number];
 	} catch (err){
 		console.error(err);
 	}
@@ -156,18 +154,18 @@ export async function _R_joinChat(create: boolean, key: Key, user: User){
 	}
 }
 
-export async function _R_fileUploadAuth(key: string, uid: string){
+export async function _R_fileAuth(key: string, uid: string, resumeToken: string){
 	try{
 
 		//if sha is not available on redis, load it
-		const exists = await redis.scriptExists(SHA_FILE_UPLOAD);
+		const exists = await redis.scriptExists(SHA_FILE_AUTH);
 
 		if (!exists[0]){
-			SHA_FILE_UPLOAD = await redis.scriptLoad(fileUploadAuthScript);
-			console.log('Script re-loaded: fileUploadAuth.lua');
+			SHA_FILE_AUTH = await redis.scriptLoad(fileAuthScript);
+			console.log('Script re-loaded: fileAuth.lua');
 		}
 
-		const res = await redis.evalsha(SHA_FILE_UPLOAD, [], [key, uid]);
+		const res = await redis.evalsha(SHA_FILE_AUTH, [], [key, uid, resumeToken]);
 		return res;
 	} catch (err){
 		console.error(err);
